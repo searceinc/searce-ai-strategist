@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// Sessions are created/updated by Cloud Functions (Admin SDK).
+// History / open-session use callable functions (Admin reads), so client direct reads are optional.
+// Deploy: firebase deploy --only firestore:rules
+// Rules deploy target: set "database" under "firestore" in firebase.json (this project: searce-marketing).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /strategist_sessions/{sessionId} {
+      allow read: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+  }
+}

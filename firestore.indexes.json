@@ -1,0 +1,22 @@
+{
+	"indexes": [
+		{
+			"collectionGroup": "strategist_sessions",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{ "fieldPath": "userId", "order": "ASCENDING" },
+				{ "fieldPath": "createdAt", "order": "DESCENDING" }
+			]
+		},
+		{
+			"collectionGroup": "strategist_sessions",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{ "fieldPath": "userId", "order": "ASCENDING" },
+				{ "fieldPath": "isFavorite", "order": "ASCENDING" },
+				{ "fieldPath": "createdAt", "order": "DESCENDING" }
+			]
+		}
+	],
+	"fieldOverrides": []
+}
