@@ -47,7 +47,7 @@ BAD: "According to [source], companies are..."
 GOOD: "With ${new Date().getFullYear()} projections showing a massive shift toward predictive cost modeling, many ${industryName} leaders are focused on harmonizing their data to stay ahead."
 
 ### 2. THE HOOK
-Start with a SPECIFIC pain point or industry shift. Use ${input.targetCompany || "the company"} naturally — never forced.
+Start with a SPECIFIC pain point or industry shift.${input.targetCompany ? ` Reference ${input.targetCompany} naturally — never forced.` : " Write for the industry and role — no specific company needed."}
 
 ### 3. PROOF (Searce Stories)
 NEVER just list case studies. Tell the outcome in context:
@@ -59,8 +59,8 @@ LOW-FRICTION only. "Happy to share the framework we used — worth a 15-min chat
 NEVER: "Book a demo today!"
 
 ### 5. PERSONALIZATION
-${input.targetCompany ? `Mention ${input.targetCompany} 1-2 times MAX, only where it adds genuine value.` : "Use [Company] as placeholder."}
-${input.targetPersonaJobTitle ? `Write to a ${input.targetPersonaJobTitle} — reference their specific daily realities.` : "Write to the functional role naturally."}
+${input.targetCompany ? `Mention ${input.targetCompany} 1-2 times MAX, only where it adds genuine value.` : "No company name provided. Write generically for the industry and role. NEVER output '[Company]', '[Company Name]', or any bracket placeholder in the copy."}
+${input.targetPersonaJobTitle ? `Write to a ${input.targetPersonaJobTitle} — reference their specific daily realities.` : `Write to a senior ${functionName} leader — reference their daily operational and strategic realities.`}
 Personalization should feel earned, not templated.
 
 ${angleInstruction(industryName, functionName, subFunctionName, input)}
@@ -76,8 +76,7 @@ Technologies: ${cloudContext.technologies.join(", ")}
 
 ## TARGET PERSONA
 Industry: ${industryName} | Function: ${functionName} | Sub: ${subFunctionName || "General"}
-Title: ${input.targetPersonaJobTitle || "Executive"} | Region: ${REGION_LABELS[input.region] ?? input.region}
-Company: ${input.targetCompany || "Target Company"}
+Title: ${input.targetPersonaJobTitle || `Senior ${functionName} Leader`} | Region: ${REGION_LABELS[input.region] ?? input.region}${input.targetCompany ? `\nCompany: ${input.targetCompany}` : ""}
 
 ## VERIFIED CASE STUDIES (ONLY USE THESE — NEVER INVENT URLs)
 ${caseStudyRefs}
@@ -91,7 +90,7 @@ ${caseStudyRefs}
 1. Weave metrics into narrative sentences with hyperlinked sources — no raw stat dumps
 2. Only verified Searce case study metrics — never invent results
 3. Include "Verified Searce Resources" section at end with exact URLs
-4. Immediately usable by sales teams — no placeholders except [Company] if none provided
+4. Immediately usable by sales teams — never leave bracket placeholders like [Company] in the output
 5. Every word earns its place. No filler.`;
 }
 
@@ -116,8 +115,8 @@ export function buildContentPrompt(brief: ContentBrief, cloudContext: CloudConte
 	const formatInstructions = buildFormatInstructions(input);
 
 	let prompt = `## RESEARCH INSIGHTS (Live Tavily Data)
-LinkedIn Signal: ${input.targetPersonaJobTitle || "Executive"} with focus on ${functionName} excellence and digital transformation initiatives
-Company News: ${research.companyContext || "No specific company news found — use industry context"}
+LinkedIn Signal: ${input.targetPersonaJobTitle || `Senior ${functionName} Leader`} with focus on ${functionName} excellence and digital transformation initiatives
+${research.companyContext ? `Company News: ${research.companyContext}` : `Company News: No company-specific news — lean on industry and role context`}
 Industry Context: ${research.industryTrends[0] ?? `${industryName} sector showing strong cloud adoption trends`}
 `;
 
@@ -150,13 +149,13 @@ Industry Context: ${research.industryTrends[0] ?? `${industryName} sector showin
 
 	prompt += `
 ## TARGET PROFILE
-- Company: ${input.targetCompany}
-- Domain: ${input.targetDomain || "Not provided"}
-- LinkedIn: ${input.targetLinkedInUrl || "Not provided"}
+${input.targetCompany ? `- Company: ${input.targetCompany}` : "- Company: Not provided (write for the industry/role without a company name)"}
+${input.targetDomain ? `- Domain: ${input.targetDomain}` : ""}
+${input.targetLinkedInUrl ? `- LinkedIn: ${input.targetLinkedInUrl}` : ""}
 - Industry: ${industryName} (${input.targetPersonaIndustry})
 - Function: ${functionName}
 - Sub-Function: ${subFunctionName || "General"}
-- Job Title: ${input.targetPersonaJobTitle}
+- Job Title: ${input.targetPersonaJobTitle || `Senior ${functionName} Leader (generic)`}
 - Region: ${REGION_LABELS[input.region] ?? input.region}
 - Searce Service: ${input.selectedService?.replace(/_/g, " ") ?? "Not specified"}
 - Cloud Ecosystem: ${input.cloudEcosystem.toUpperCase()} (${cloudContext.partnerStatus})
@@ -207,8 +206,8 @@ ${formatInstructions}
 - Include "Verified Searce Resources" section at the end
 - NEVER drop raw research snippets, bullet points, or URLs into the message body — weave all insights into conversational narrative sentences
 - Every statistic must be woven into a sentence and hyperlinked: "Industry leaders are seeing [X improvement](source_url) in..."
-- ${input.targetCompany ? `Personalize for ${input.targetCompany} — mention 1-2 times naturally, never forced` : "Use [Company] placeholder"}
-- ${input.targetPersonaJobTitle ? `Write as if speaking directly to a ${input.targetPersonaJobTitle} — reference their specific daily realities` : "Write to the functional role"}
+- ${input.targetCompany ? `Personalize for ${input.targetCompany} — mention 1-2 times naturally, never forced` : "No company name was provided. Write for the industry and role without naming a company. NEVER output '[Company]', '[Company Name]', or any bracket placeholder — the copy must read naturally without one"}
+- ${input.targetPersonaJobTitle ? `Write as if speaking directly to a ${input.targetPersonaJobTitle} — reference their specific daily realities` : `Write as if speaking to a senior ${functionName} leader — reference their daily operational priorities and strategic pressures`}
 - Keep CTAs low-friction: "exchanging notes," "sharing a framework," "worth a quick chat?" — NEVER "book a demo" or "schedule a meeting"
 - Write like a human expert, not an AI. No filler. Every word earns its place.
 

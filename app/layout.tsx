@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { Geist } from "next/font/google";
 import "./globals.css";
-import { cn } from "@/lib/utils";
+import { assetPath, cn } from "@/lib/utils";
 import ThemeProvider from "@/components/ThemeProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
@@ -26,16 +26,16 @@ export const metadata: Metadata = {
 		"AI powered Searce Content Strategy & Creation offering content strategy and creation services.",
 	icons: {
 		icon: [
-			{ url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-			{ url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+			{ url: assetPath("/favicon-16x16.png"), sizes: "16x16", type: "image/png" },
+			{ url: assetPath("/favicon-32x32.png"), sizes: "32x32", type: "image/png" },
 		],
-		apple: "/apple-touch-icon.png",
+		apple: assetPath("/apple-touch-icon.png"),
 		other: [
-			{ rel: "android-chrome-192x192", url: "/android-chrome-192x192.png" },
-			{ rel: "android-chrome-512x512", url: "/android-chrome-512x512.png" },
+			{ rel: "android-chrome-192x192", url: assetPath("/android-chrome-192x192.png") },
+			{ rel: "android-chrome-512x512", url: assetPath("/android-chrome-512x512.png") },
 		],
 	},
-	manifest: "/site.webmanifest",
+	manifest: assetPath("/site.webmanifest"),
 };
 
 export const viewport: Viewport = {

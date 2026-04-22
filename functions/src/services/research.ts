@@ -71,7 +71,7 @@ export async function runResearch(
 
 	// ── Search 3: Pain points & challenges ──
 	// Focused on the ACTUAL persona function — not hardcoded "CTO CIO".
-	// A Marketing Director's pain points differ from a CTO's.
+	// A Marketing Director's pain points differ from a `CTO's.
 	searchPromises.push(
 		tavilySearch({
 			query: `${industryName} ${functionName} biggest technology challenges and pain points`,

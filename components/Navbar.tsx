@@ -8,6 +8,7 @@ import { useAuthStore } from "@/lib/store/useAuthStore";
 import { signOut } from "@/lib/firebase/auth";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { assetPath } from "@/lib/utils";
 
 export default function Navbar() {
 	const { user } = useAuthStore();
@@ -17,7 +18,7 @@ export default function Navbar() {
 			<div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
 				<Link href="/" className="flex items-center">
 					<Image
-						src="/images/logo.svg"
+						src={assetPath("/images/logo.svg")}
 						alt="Searce"
 						width={120}
 						height={26}
@@ -25,7 +26,7 @@ export default function Navbar() {
 						className="block dark:hidden"
 					/>
 					<Image
-						src="/images/searce-logo-white.svg"
+						src={assetPath("/images/searce-logo-white.svg")}
 						alt="Searce"
 						width={120}
 						height={26}

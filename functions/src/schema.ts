@@ -1,13 +1,13 @@
 import { z } from "zod";
 
 export const generationInputSchema = z.object({
-	targetCompany: z.string().min(1),
-	targetDomain: z.string(),
-	targetLinkedInUrl: z.string(),
+	targetCompany: z.string().optional().default(""),
+	targetDomain: z.string().optional().default(""),
+	targetLinkedInUrl: z.string().optional().default(""),
 	targetPersonaIndustry: z.string().min(1),
 	targetPersonaFunction: z.string().min(1),
 	targetPersonaSubFunction: z.string().optional().default(""),
-	targetPersonaJobTitle: z.string().min(1),
+	targetPersonaJobTitle: z.string().optional().default(""),
 	region: z.string().min(1),
 	selectedService: z.string(),
 	selectedFormat: z.string().min(1),

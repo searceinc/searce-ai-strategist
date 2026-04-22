@@ -33,9 +33,11 @@ export default function HistoryCard({ session, onOpen, onToggleFavorite }: Histo
 			<CardContent className="flex flex-col gap-3 pt-4">
 				<div className="flex items-start justify-between">
 					<div className="space-y-1">
-						<h3 className="font-semibold leading-tight">{session.targetCompany}</h3>
+						<h3 className="font-semibold leading-tight">
+							{session.targetCompany || serviceLabel || "Industry Campaign"}
+						</h3>
 						<p className="text-xs text-muted-foreground">
-							{session.targetPersonaJobTitle}
+							{session.targetPersonaJobTitle || session.region || "General audience"}
 						</p>
 					</div>
 					<Button

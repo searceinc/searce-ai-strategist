@@ -86,16 +86,14 @@ export default function ConfigPanel() {
 	}, [input.targetPersonaFunction]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const canGenerate =
-		input.targetCompany.trim() &&
 		input.targetPersonaIndustry.trim() &&
 		input.targetPersonaFunction.trim() &&
-		input.targetPersonaJobTitle.trim() &&
 		input.region.trim() &&
 		input.selectedService.trim();
 
 	async function handleGenerate() {
 		if (!canGenerate) {
-			toast.error("Fill in all required fields");
+			toast.error("Please fill in Industry, Function, Region and Service");
 			return;
 		}
 
@@ -148,9 +146,9 @@ export default function ConfigPanel() {
 							Company Intel
 						</legend>
 
-						<FormField icon={Building2} label="Company Name" required>
+						<FormField icon={Building2} label="Company Name">
 							<Input
-								placeholder="e.g. Acme Corp"
+								placeholder="e.g. Acme Corp (optional)"
 								value={input.targetCompany}
 								onChange={(e) => setInput({ targetCompany: e.target.value })}
 							/>
@@ -238,9 +236,9 @@ export default function ConfigPanel() {
 							</FormField>
 						)}
 
-						<FormField icon={User} label="Job Title" required>
+						<FormField icon={User} label="Job Title">
 							<Input
-								placeholder="e.g. VP of Engineering"
+								placeholder="e.g. VP of Engineering (optional)"
 								value={input.targetPersonaJobTitle}
 								onChange={(e) =>
 									setInput({ targetPersonaJobTitle: e.target.value })
