@@ -2,14 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, Loader2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { signInWithEmail, signInWithGoogle } from "@/lib/firebase/auth";
+import { signInWithGoogle } from "@/lib/firebase/auth";
 
 function GoogleIcon() {
 	return (
@@ -35,24 +31,8 @@ function GoogleIcon() {
 }
 
 export default function AuthForm() {
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
 	const [loading, setLoading] = useState(false);
 	const router = useRouter();
-
-	const handleEmailAuth = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setLoading(true);
-		try {
-			await signInWithEmail(email, password);
-			toast.success("Signed in successfully");
-			router.push("/");
-		} catch (error) {
-			toast.error(error instanceof Error ? error.message : "Authentication failed");
-		} finally {
-			setLoading(false);
-		}
-	};
 
 	const handleGoogleAuth = async () => {
 		setLoading(true);
@@ -84,55 +64,6 @@ export default function AuthForm() {
 					<GoogleIcon />
 					Continue with Google
 				</Button>
-
-				<div className="relative">
-					<Separator />
-					<span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
-						or
-					</span>
-				</div>
-
-				<form onSubmit={handleEmailAuth} className="space-y-3">
-					<div className="space-y-2">
-						<Label htmlFor="email" className="flex items-center gap-1.5 text-sm">
-							<Mail className="size-3.5 text-muted-foreground" />
-							Email
-						</Label>
-						<Input
-							id="email"
-							type="email"
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-							placeholder="you@company.com"
-							required
-						/>
-					</div>
-					<div className="space-y-2">
-						<Label htmlFor="password" className="flex items-center gap-1.5 text-sm">
-							<Lock className="size-3.5 text-muted-foreground" />
-							Password
-						</Label>
-						<Input
-							id="password"
-							type="password"
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							placeholder="Enter your password"
-							required
-							minLength={6}
-						/>
-					</div>
-					<Button type="submit" className="w-full" size="lg" disabled={loading}>
-						{loading ? (
-							<Loader2 className="size-4 animate-spin" />
-						) : (
-							<>
-								Sign In
-								<ArrowRight className="size-4" />
-							</>
-						)}
-					</Button>
-				</form>
 			</CardContent>
 		</Card>
 	);
