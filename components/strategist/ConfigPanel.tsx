@@ -97,6 +97,8 @@ export default function ConfigPanel() {
 			return;
 		}
 
+		console.log("generating content");
+
 		setGenerating(true);
 
 		try {
@@ -104,7 +106,9 @@ export default function ConfigPanel() {
 			if (currentSessionId) {
 				result = await callRegenerateContent(currentSessionId, input);
 			} else {
+				console.log("before calling generate content");
 				result = await callGenerateContent(input);
+				console.log("after calling generate content");
 			}
 
 			if (result.featureNotAvailable) {
@@ -115,8 +119,9 @@ export default function ConfigPanel() {
 				);
 				return;
 			}
-
+			console.log("before setting generation result");
 			setGenerationResult({ ...result, sessionId: result.sessionId });
+			console.log("after setting generation result");
 			toast.success("Content generated successfully");
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : "Generation failed";
