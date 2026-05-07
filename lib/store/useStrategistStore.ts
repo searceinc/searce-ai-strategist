@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { DEFAULT_GENERATION_INPUT } from "@/lib/default-generation-input";
+import { DEFAULT_GENERATION_INPUT, normalizeGenerationInput } from "@/lib/default-generation-input";
 import {
 	normalizeResearchSnapshot,
 	type FallbackPath,
@@ -98,6 +98,7 @@ export const useStrategistStore = create<StrategistState>((set) => ({
 	hydrateFromSavedSession: (session) =>
 		set({
 			currentSessionId: session.id,
+			input: normalizeGenerationInput(session.input ?? {}),
 			research: normalizeResearchSnapshot(session.research),
 			caseStudyMatches: session.caseStudyMatches ?? [],
 			fallbackPath: session.fallbackPath ?? "none",

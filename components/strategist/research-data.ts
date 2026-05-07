@@ -26,7 +26,7 @@ export const VERIFIED_SEARCE_LINKS: Record<
 			metrics: "10M+ users, Google Maps integration",
 		},
 	],
-	MIC: [
+	MCM: [
 		{
 			title: "Manufacturing Giant: 50% Performance Boost",
 			url: "https://www.searce.com/archive/cs-112-detail",
@@ -86,7 +86,7 @@ export const VERIFIED_SEARCE_LINKS: Record<
 			metrics: "60% review time reduction with AI",
 		},
 	],
-	NEU: [
+	EUP: [
 		{
 			title: "Pasajob: 62% Cloud Cost Savings",
 			url: "https://www.searce.com/archive/cs-128-detail",

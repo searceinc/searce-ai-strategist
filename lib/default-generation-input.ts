@@ -1,4 +1,5 @@
 import { CONTENT_FORMATS } from "@/lib/constants";
+import { migrateLegacyInput } from "@/lib/legacy-codes";
 import type { ContentFormat, GenerationInput } from "@/lib/types";
 
 const VALID_FORMATS = new Set<ContentFormat>(CONTENT_FORMATS.map((f) => f.value));
@@ -8,8 +9,8 @@ export const DEFAULT_GENERATION_INPUT: GenerationInput = {
 	targetDomain: "",
 	targetLinkedInUrl: "",
 	targetPersonaIndustry: "",
-	targetPersonaFunction: "",
-	targetPersonaSubFunction: "",
+	targetPersonaCategory: "",
+	targetPersonaSubCategory: "",
 	targetPersonaJobTitle: "",
 	region: "",
 	selectedService: "",
@@ -17,18 +18,20 @@ export const DEFAULT_GENERATION_INPUT: GenerationInput = {
 	strategicAngle: "pain_point",
 	cloudEcosystem: "gcp",
 	intelligentFallback: true,
-	notes: "",
+	instructions: "",
+	myNotes: "",
 	nurtureTemplate: "1",
 	emailSequenceLength: 5,
 	linkedinInmailVariation: "1",
 };
 
-/** Merge Firestore / partial payloads into a valid GenerationInput (legacy sessions, removed formats). */
+/** Merge Firestore / partial payloads into a valid GenerationInput. Applies legacy migration first. */
 export function normalizeGenerationInput(raw: Partial<GenerationInput>): GenerationInput {
+	const migrated = migrateLegacyInput(raw);
 	const merged: GenerationInput = {
 		...DEFAULT_GENERATION_INPUT,
-		...raw,
-	};
+		...migrated,
+	} as GenerationInput;
 	if (!VALID_FORMATS.has(merged.selectedFormat)) {
 		merged.selectedFormat = "cold_email";
 	}

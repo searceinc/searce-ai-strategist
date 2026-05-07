@@ -1,6 +1,13 @@
 import type { VerifiedCaseStudy } from "../types.js";
 import { REGION_FALLBACKS } from "./labels.js";
+import { migrateIndustryCode } from "./legacy-codes.js";
 
+/**
+ * Verified case studies. The `categories` field uses sheet-driven category
+ * slugs (e.g. "banking", "logistics-and-warehousing") so we can match to the
+ * configured industry → category combination. The legacy `departments` field
+ * has been retired along with persona-function.
+ */
 export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 	{
 		id: "cs-rebel-foods",
@@ -10,7 +17,7 @@ export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 		url: "https://www.searce.com/archive/cs-123-detail",
 		industries: ["RCE"],
 		regions: ["India", "APAC"],
-		departments: ["it", "operations"],
+		categories: ["e-commerce-digital-channels", "retail-channels"],
 		cloudProvider: "gcp",
 		context:
 			"See how Searce transformed Rebel Foods' delivery operations with real-time analytics and cloud-native architecture",
@@ -23,7 +30,7 @@ export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 		url: "https://www.searce.com/archive/cs-139-detail",
 		industries: ["TTL", "TSS"],
 		regions: ["India"],
-		departments: ["it", "operations"],
+		categories: ["passenger-travel", "core-technology-and-software-platforms"],
 		cloudProvider: "gcp",
 		context:
 			"Discover how Searce built a scalable, open-source mobility platform that disrupted the ride-hailing industry",
@@ -36,7 +43,7 @@ export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 		url: "https://www.searce.com/archive/cs-138-detail",
 		industries: ["HLS"],
 		regions: ["India", "APAC"],
-		departments: ["it", "finance"],
+		categories: ["life-sciences"],
 		cloudProvider: "aws",
 		context:
 			"Learn how Searce implemented a modern data lake on AWS for a leading pharmaceutical company",
@@ -50,7 +57,7 @@ export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 		url: "https://www.searce.com/archive/cs-127-detail",
 		industries: ["TTL"],
 		regions: ["India"],
-		departments: ["it", "operations"],
+		categories: ["passenger-travel"],
 		cloudProvider: "gcp",
 		context:
 			"See how Searce solved complex routing challenges for India's largest bike-taxi platform",
@@ -63,7 +70,7 @@ export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 		url: "https://www.searce.com/archive/cs-136-detail",
 		industries: ["TTL"],
 		regions: ["India", "APAC"],
-		departments: ["it"],
+		categories: ["travel-and-logistics-technology", "passenger-travel"],
 		cloudProvider: "gcp",
 		context:
 			"Discover how Searce ensured peak-season reliability for one of India's top travel platforms",
@@ -76,7 +83,7 @@ export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 		url: "https://www.searce.com/archive/cs-139-detail",
 		industries: ["TTL"],
 		regions: ["India", "APAC", "AMER"],
-		departments: ["it", "operations"],
+		categories: ["passenger-travel", "travel-and-logistics-technology"],
 		cloudProvider: "gcp",
 		context:
 			"Learn how Searce enabled redBus to handle massive traffic spikes with cloud-native scaling",
@@ -89,7 +96,7 @@ export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 		url: "https://www.searce.com/archive/cs-143-detail",
 		industries: ["TSS"],
 		regions: ["India", "APAC", "AMER"],
-		departments: ["it", "finance"],
+		categories: ["core-technology-and-software-platforms"],
 		cloudProvider: "gcp",
 		context:
 			"See how Searce helped a leading ed-tech platform optimize cloud spend while improving performance",
@@ -100,9 +107,9 @@ export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 		client: "Colive",
 		metrics: "50% faster feature deployment, unified tenant management platform",
 		url: "https://www.searce.com/archive/cs-117-detail",
-		industries: ["TSS", "MIC"],
+		industries: ["TSS", "MCM"],
 		regions: ["India"],
-		departments: ["it", "operations"],
+		categories: ["core-technology-and-software-platforms", "construction"],
 		cloudProvider: "gcp",
 		context:
 			"Discover how Searce built a scalable property-tech platform enabling rapid expansion",
@@ -115,7 +122,7 @@ export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 		url: "https://www.searce.com/archive/cs-147-detail",
 		industries: ["FSI"],
 		regions: ["India"],
-		departments: ["it", "finance"],
+		categories: ["fintech-and-emerging", "payments-and-lending"],
 		cloudProvider: "gcp",
 		context:
 			"Learn how Searce enabled instant loan disbursement through data platform modernization",
@@ -128,7 +135,7 @@ export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 		url: "https://www.searce.com/archive/cs-142-detail",
 		industries: ["FSI"],
 		regions: ["India"],
-		departments: ["finance", "it", "operations"],
+		categories: ["payments-and-lending", "banking"],
 		cloudProvider: "gcp",
 		context: "See how Searce digitized lending operations for a traditional NBFC",
 	},
@@ -140,7 +147,7 @@ export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 		url: "https://www.searce.com/archive/cs-139-detail",
 		industries: ["RCE", "FSI", "TMEG"],
 		regions: ["India", "APAC", "AMER", "EMEA"],
-		departments: ["marketing", "sales"],
+		categories: ["retail-channels", "banking", "media"],
 		cloudProvider: "gcp",
 		context:
 			"Discover how Searce's location intelligence solutions drive measurable marketing ROI",
@@ -151,9 +158,13 @@ export const VERIFIED_CASE_STUDIES: VerifiedCaseStudy[] = [
 		client: "Multiple Enterprise Clients",
 		metrics: "60% reduction in data processing time, unified analytics across business units",
 		url: "https://www.searce.com/insights/case-studies",
-		industries: ["TSS", "MIC", "NEU", "MISC"],
+		industries: ["TSS", "MCM", "EUP", "MISC"],
 		regions: ["India", "APAC", "AMER", "EMEA"],
-		departments: ["it", "finance", "operations"],
+		categories: [
+			"core-technology-and-software-platforms",
+			"manufacturing",
+			"utilities-and-power",
+		],
 		cloudProvider: "multicloud",
 		context: "See how Searce enables data-driven decision making through modern data platforms",
 	},
@@ -197,7 +208,7 @@ export const VERIFIED_SEARCE_LINKS: Record<
 			metrics: "10M+ users, Google Maps integration",
 		},
 	],
-	MIC: [
+	MCM: [
 		{
 			title: "Manufacturing Giant: 50% Performance Boost & 30% Cost Savings",
 			url: "https://www.searce.com/archive/cs-112-detail",
@@ -287,7 +298,7 @@ export const VERIFIED_SEARCE_LINKS: Record<
 			metrics: "60% review time reduction with AI",
 		},
 	],
-	NEU: [
+	EUP: [
 		{
 			title: "Pasajob: 62% Cloud Cost Savings with Google Cloud",
 			url: "https://www.searce.com/archive/cs-128-detail",
@@ -326,14 +337,22 @@ interface CaseStudyMatch {
 	fallbackRegion?: string;
 }
 
+/**
+ * Score-based case study matcher.
+ *
+ * Removed: persona-function dimension (replaced with industry category).
+ * The `category` arg is the sheet-driven category slug (e.g. "banking").
+ * If empty, only industry + region scoring applies.
+ */
 export function getVerifiedCaseStudies(
 	industryCode: string,
 	region: string,
-	personaFunction: string,
+	category: string,
 	cloudEcosystem: string,
 	useFallback: boolean,
 ): CaseStudyMatch {
-	let scoredStudies = scoreAndFilter(industryCode, region, personaFunction, cloudEcosystem);
+	const canonicalIndustry = migrateIndustryCode(industryCode);
+	let scoredStudies = scoreAndFilter(canonicalIndustry, region, category, cloudEcosystem);
 	if (scoredStudies.length > 0) {
 		return { studies: scoredStudies, usedFallback: false };
 	}
@@ -342,9 +361,9 @@ export function getVerifiedCaseStudies(
 		const fallbackRegion = REGION_FALLBACKS[region];
 		if (fallbackRegion) {
 			scoredStudies = scoreAndFilter(
-				industryCode,
+				canonicalIndustry,
 				fallbackRegion,
-				personaFunction,
+				category,
 				cloudEcosystem,
 			);
 			if (scoredStudies.length > 0) {
@@ -359,14 +378,15 @@ export function getVerifiedCaseStudies(
 function scoreAndFilter(
 	industryCode: string,
 	region: string,
-	personaFunction: string,
+	category: string,
 	cloudEcosystem: string,
 ): VerifiedCaseStudy[] {
 	return VERIFIED_CASE_STUDIES.map((study) => {
 		let score = 0;
 		if (study.regions.includes(region)) score += 50;
-		if (study.industries.includes(industryCode)) score += 40;
-		if (study.departments.includes(personaFunction)) score += 20;
+		const studyIndustries = study.industries.map(migrateIndustryCode);
+		if (studyIndustries.includes(industryCode)) score += 40;
+		if (category && study.categories.includes(category)) score += 25;
 		if (study.cloudProvider === cloudEcosystem || study.cloudProvider === "multicloud")
 			score += 10;
 		return { ...study, _score: score };

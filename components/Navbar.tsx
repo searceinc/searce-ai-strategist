@@ -16,13 +16,14 @@ export default function Navbar() {
 	return (
 		<header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
 			<div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-				<Link href="/" className="flex items-center">
+				<Link href="/" className="flex items-center" suppressHydrationWarning>
 					<Image
 						src={assetPath("/images/logo.svg")}
 						alt="Searce"
 						width={120}
 						height={26}
 						priority
+						style={{ width: "auto", height: "auto" }}
 						className="block dark:hidden"
 					/>
 					<Image
@@ -31,6 +32,7 @@ export default function Navbar() {
 						width={120}
 						height={26}
 						priority
+						style={{ width: "auto", height: "auto" }}
 						className="hidden dark:block"
 					/>
 				</Link>

@@ -1,3 +1,5 @@
+import { migrateIndustryCode } from "./legacy-codes.js";
+
 const METRICS: Record<string, string[]> = {
 	TTL: [
 		"According to Gartner, 78% of logistics companies investing in cloud analytics see 25%+ improvement in route optimization",
@@ -9,7 +11,7 @@ const METRICS: Record<string, string[]> = {
 		"IDC research shows software companies on modern cloud infrastructure reduce operational costs by 35%",
 		"Industry Standard: Forrester reports SaaS companies with mature DevOps practices achieve 3x faster time-to-market",
 	],
-	MIC: [
+	MCM: [
 		"According to McKinsey, manufacturers adopting IoT and cloud analytics see 20-25% production efficiency gains",
 		"IDC reports construction firms using cloud collaboration tools complete projects 18% faster",
 		"Industry Standard: Gartner shows smart factory implementations reduce unplanned downtime by 45%",
@@ -34,7 +36,7 @@ const METRICS: Record<string, string[]> = {
 		"IDC shows educational institutions using cloud LMS improve student engagement by 35%",
 		"Industry Standard: Forrester reports public sector cloud adoption improves citizen service delivery by 25%",
 	],
-	NEU: [
+	EUP: [
 		"McKinsey reports energy companies using predictive analytics reduce equipment failures by 35%",
 		"IDC shows utilities leveraging IoT and cloud achieve 25% improvement in grid efficiency",
 		"Industry Standard: Gartner indicates renewable energy companies with cloud analytics optimize output by 20%",
@@ -52,5 +54,6 @@ const METRICS: Record<string, string[]> = {
 };
 
 export function getIndustryMetrics(industryCode: string): string[] {
-	return METRICS[industryCode] ?? METRICS.MISC!;
+	const canonical = migrateIndustryCode(industryCode);
+	return METRICS[canonical] ?? METRICS.MISC!;
 }

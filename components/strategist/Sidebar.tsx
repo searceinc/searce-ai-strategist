@@ -24,7 +24,7 @@ export default function Sidebar() {
 				sidebarOpen ? "w-60" : "w-14",
 			)}
 		>
-			<div className="flex items-center justify-between px-3 py-4">
+			<div className="flex items-center justify-between py-4 pl-5 pr-3">
 				{sidebarOpen && (
 					<span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
 						Strategist

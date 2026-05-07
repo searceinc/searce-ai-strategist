@@ -45,9 +45,12 @@ export interface GenerationInput {
 	targetCompany: string;
 	targetDomain: string;
 	targetLinkedInUrl: string;
+	/** Industry code (e.g. FSI, HLS) sourced from sheet 1. */
 	targetPersonaIndustry: string;
-	targetPersonaFunction: string;
-	targetPersonaSubFunction: string;
+	/** Industry-category slug (e.g. "banking") sourced from sheet 2. */
+	targetPersonaCategory: string;
+	/** Industry-sub-category slug (e.g. "retail-and-consumer") sourced from sheet 3. */
+	targetPersonaSubCategory: string;
 	targetPersonaJobTitle: string;
 	region: string;
 	selectedService: SearceService | "";
@@ -55,7 +58,10 @@ export interface GenerationInput {
 	strategicAngle: StrategicAngle;
 	cloudEcosystem: string;
 	intelligentFallback: boolean;
-	notes: string;
+	/** Free-text directive that the model MUST follow (e.g. "make it short"). */
+	instructions: string;
+	/** Private rep notes; never sent to the model. */
+	myNotes: string;
 	nurtureTemplate: NurtureTemplate;
 	emailSequenceLength: EmailSequenceLength;
 	linkedinInmailVariation: LinkedinInmailVariation;
@@ -122,9 +128,30 @@ export interface VerifiedCaseStudy {
 	url: string;
 	industries: string[];
 	regions: string[];
-	departments: string[];
+	/**
+	 * Industry-category slugs the case study addresses (e.g. "banking",
+	 * "logistics-and-warehousing"). Replaces the old persona-function field.
+	 */
+	categories: string[];
 	cloudProvider: string;
 	context: string;
+}
+
+// ─── Sheet-driven pain points (server-side) ─────────────────────────────────
+
+export interface SheetPainPointBundle {
+	industryCode: string;
+	category: string;
+	subCategory: string;
+	categoryLabel: string;
+	subCategoryLabel: string;
+	fullId: string | null;
+	detailed: string[];
+	converged: string[];
+	detailedUseCases: string[];
+	convergedUseCases: string[];
+	/** Searce practices that score >= 2 for these pain points; never claim others. */
+	relevantPractices: string[];
 }
 
 // ─── Content Brief (assembled server-side, never sent to client) ─────────────
@@ -138,5 +165,5 @@ export interface ContentBrief {
 	fallbackRegion?: string;
 	confidenceScore: number;
 	industryMetrics: string[];
-	painPoints: string[];
+	sheetPainPoints: SheetPainPointBundle;
 }

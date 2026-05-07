@@ -16,6 +16,8 @@ import {
 	Cloud,
 	Target,
 	Shield,
+	HelpCircle,
+	NotebookPen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,6 +34,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStrategistStore } from "@/lib/store/useStrategistStore";
 import { callGenerateContent, callRegenerateContent } from "@/lib/firebase/firestore";
 import {
@@ -41,9 +44,9 @@ import {
 	NURTURE_TEMPLATE_OPTIONS,
 	SEARCE_SERVICES,
 	REGIONS,
-	PERSONA_FUNCTIONS,
 	INDUSTRIES,
-	SUB_FUNCTIONS,
+	getCategoryOptions,
+	getSubCategoryOptions,
 	CLOUD_ECOSYSTEMS,
 	STRATEGIC_ANGLES,
 } from "@/lib/constants";
@@ -72,28 +75,39 @@ export default function ConfigPanel() {
 	} = useStrategistStore();
 
 	useEffect(() => {
-		if (input.targetPersonaFunction) {
-			const subs = SUB_FUNCTIONS[input.targetPersonaFunction];
-			if (subs) {
-				const validValues = subs.map((s) => s.value);
-				if (!validValues.includes(input.targetPersonaSubFunction)) {
-					setInput({ targetPersonaSubFunction: "" });
-				}
-			} else {
-				setInput({ targetPersonaSubFunction: "" });
-			}
+		const cats = getCategoryOptions(input.targetPersonaIndustry);
+		const validCategoryValues = cats.map((c) => c.value);
+		if (
+			input.targetPersonaCategory &&
+			!validCategoryValues.includes(input.targetPersonaCategory)
+		) {
+			setInput({ targetPersonaCategory: "", targetPersonaSubCategory: "" });
 		}
-	}, [input.targetPersonaFunction]); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [input.targetPersonaIndustry]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	useEffect(() => {
+		const subs = getSubCategoryOptions(
+			input.targetPersonaIndustry,
+			input.targetPersonaCategory,
+		);
+		const validValues = subs.map((s) => s.value);
+		if (
+			input.targetPersonaSubCategory &&
+			!validValues.includes(input.targetPersonaSubCategory)
+		) {
+			setInput({ targetPersonaSubCategory: "" });
+		}
+	}, [input.targetPersonaIndustry, input.targetPersonaCategory]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const canGenerate =
 		input.targetPersonaIndustry.trim() &&
-		input.targetPersonaFunction.trim() &&
+		input.targetPersonaCategory.trim() &&
 		input.region.trim() &&
 		input.selectedService.trim();
 
 	async function handleGenerate() {
 		if (!canGenerate) {
-			toast.error("Please fill in Industry, Function, Region and Service");
+			toast.error("Please fill in Industry, Category, Region and Service");
 			return;
 		}
 
@@ -130,7 +144,11 @@ export default function ConfigPanel() {
 		}
 	}
 
-	const currentSubFunctions = SUB_FUNCTIONS[input.targetPersonaFunction] ?? [];
+	const currentCategories = getCategoryOptions(input.targetPersonaIndustry);
+	const currentSubCategories = getSubCategoryOptions(
+		input.targetPersonaIndustry,
+		input.targetPersonaCategory,
+	);
 
 	return (
 		<Card className="flex h-full flex-col overflow-hidden">
@@ -185,7 +203,12 @@ export default function ConfigPanel() {
 							Target Persona
 						</legend>
 
-						<FormField icon={Briefcase} label="Industry" required>
+						<FormField
+							icon={Briefcase}
+							label="Industry"
+							required
+							help="The broad industry sector from the Mapped Pain Points workbook (e.g. FSI, HLS). Drives which categories and sub-categories are available below."
+						>
 							<Select
 								value={input.targetPersonaIndustry}
 								onValueChange={(v) => setInput({ targetPersonaIndustry: v })}
@@ -203,37 +226,55 @@ export default function ConfigPanel() {
 							</Select>
 						</FormField>
 
-						<FormField icon={User} label="Function" required>
+						<FormField
+							icon={User}
+							label="Category"
+							required
+							help="Sub-industry within the chosen industry (e.g. Banking inside FSI). Cascades from Industry. Determines the pain points the AI uses."
+						>
 							<Select
-								value={input.targetPersonaFunction}
-								onValueChange={(v) => setInput({ targetPersonaFunction: v })}
+								value={input.targetPersonaCategory}
+								onValueChange={(v) => setInput({ targetPersonaCategory: v })}
+								disabled={
+									!input.targetPersonaIndustry || currentCategories.length === 0
+								}
 							>
 								<SelectTrigger className="w-full">
-									<SelectValue placeholder="Select function" />
+									<SelectValue
+										placeholder={
+											input.targetPersonaIndustry
+												? "Select category"
+												: "Pick an industry first"
+										}
+									/>
 								</SelectTrigger>
 								<SelectContent>
-									{PERSONA_FUNCTIONS.map((f) => (
-										<SelectItem key={f.value} value={f.value}>
-											{f.label}
+									{currentCategories.map((c) => (
+										<SelectItem key={c.value} value={c.value}>
+											{c.label}
 										</SelectItem>
 									))}
 								</SelectContent>
 							</Select>
 						</FormField>
 
-						{currentSubFunctions.length > 0 && (
-							<FormField icon={User} label="Sub-Function">
+						{currentSubCategories.length > 0 && (
+							<FormField
+								icon={User}
+								label="Sub-Category"
+								help="Most specific level (e.g. Retail & Consumer inside Banking). The AI will pull pain points and use cases mapped exactly to this combination from Sheet 4."
+							>
 								<Select
-									value={input.targetPersonaSubFunction}
-									onValueChange={(v) => setInput({ targetPersonaSubFunction: v })}
+									value={input.targetPersonaSubCategory}
+									onValueChange={(v) => setInput({ targetPersonaSubCategory: v })}
 								>
 									<SelectTrigger className="w-full">
-										<SelectValue placeholder="Select sub-function" />
+										<SelectValue placeholder="Select sub-category" />
 									</SelectTrigger>
 									<SelectContent>
-										{currentSubFunctions.map((sf) => (
-											<SelectItem key={sf.value} value={sf.value}>
-												{sf.label}
+										{currentSubCategories.map((sc) => (
+											<SelectItem key={sc.value} value={sc.value}>
+												{sc.label}
 											</SelectItem>
 										))}
 									</SelectContent>
@@ -241,7 +282,11 @@ export default function ConfigPanel() {
 							</FormField>
 						)}
 
-						<FormField icon={User} label="Job Title">
+						<FormField
+							icon={User}
+							label="Job Title"
+							help="The recipient's actual role (e.g. CIO, VP Engineering, Marketing Director). The AI writes directly to this persona — be specific."
+						>
 							<Input
 								placeholder="e.g. VP of Engineering (optional)"
 								value={input.targetPersonaJobTitle}
@@ -261,7 +306,12 @@ export default function ConfigPanel() {
 							Target Region
 						</legend>
 
-						<FormField icon={MapPin} label="Region" required>
+						<FormField
+							icon={MapPin}
+							label="Region"
+							required
+							help="The recipient's region. Used for case-study matching — the AI prefers proof from the same region. With Intelligent Fallback on, related regions are tried if no exact match exists."
+						>
 							<Select
 								value={input.region}
 								onValueChange={(v) => setInput({ region: v })}
@@ -289,7 +339,12 @@ export default function ConfigPanel() {
 							Searce Service
 						</legend>
 
-						<FormField icon={Settings2} label="Service" required>
+						<FormField
+							icon={Settings2}
+							label="Service"
+							required
+							help="Which Searce practice you want to position. The AI is constrained to claim only what we've actually delivered for this combination — never invented capabilities."
+						>
 							<Select
 								value={input.selectedService}
 								onValueChange={(v) =>
@@ -314,10 +369,11 @@ export default function ConfigPanel() {
 
 					{/* ── Cloud Ecosystem ── */}
 					<fieldset className="space-y-3">
-						<legend className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-							<Cloud className="size-3.5" />
-							Cloud Ecosystem
-						</legend>
+						<LegendWithHelp
+							icon={Cloud}
+							label="Cloud Ecosystem"
+							help="Which cloud the message should reference. The AI uses this for partner-status copy (e.g. Google Cloud MSP, AWS Advanced Consulting Partner) and for terminology preferences."
+						/>
 
 						<div className="flex gap-2">
 							{CLOUD_ECOSYSTEMS.map((eco) => (
@@ -342,10 +398,11 @@ export default function ConfigPanel() {
 
 					{/* ── Strategic Angle ── */}
 					<fieldset className="space-y-3">
-						<legend className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-							<Target className="size-3.5" />
-							Strategic Angle
-						</legend>
+						<LegendWithHelp
+							icon={Target}
+							label="Strategic Angle"
+							help="The posture the message takes. Pain Point opens with empathy, ROI/Metrics leads with numbers, Social Proof tells a peer's story, Direct Pitch goes straight to the offer."
+						/>
 
 						<div className="grid grid-cols-2 gap-2">
 							{STRATEGIC_ANGLES.map((angle) => (
@@ -374,10 +431,11 @@ export default function ConfigPanel() {
 
 					{/* ── Intelligent Fallback ── */}
 					<fieldset className="space-y-3">
-						<legend className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-							<Shield className="size-3.5" />
-							Case Study Matching
-						</legend>
+						<LegendWithHelp
+							icon={Shield}
+							label="Case Study Matching"
+							help="Searce only claims what we've actually delivered. If no case study matches the region exactly, Intelligent Fallback substitutes the closest related region's story; otherwise the AI sticks to capability-only language."
+						/>
 
 						<div className="flex items-center justify-between rounded-md border-2 border-border bg-muted/30 p-3">
 							<div className="space-y-0.5">
@@ -531,12 +589,31 @@ export default function ConfigPanel() {
 							</FormField>
 						)}
 
-						<FormField icon={StickyNote} label="Notes / Campaign Goal">
+						<FormField
+							icon={StickyNote}
+							label="Instructions to Strategist"
+							help={
+								'Free-text directive the AI MUST follow. Examples: "make it short", "lead with ROI", "use British English", "mention our APAC office". Treated as a high-priority instruction inside the prompt, not just background context.'
+							}
+						>
 							<Textarea
-								placeholder="Optional context for the generation..."
-								rows={3}
-								value={input.notes}
-								onChange={(e) => setInput({ notes: e.target.value })}
+								placeholder='Directive the AI must follow (e.g. "make it short", "lead with ROI", "use British English")'
+								rows={2}
+								value={input.instructions}
+								onChange={(e) => setInput({ instructions: e.target.value })}
+							/>
+						</FormField>
+
+						<FormField
+							icon={NotebookPen}
+							label="My Notes (private)"
+							help="Your own working notes about this prospect, this case, or follow-ups. Saved with the session for your future reference. NEVER sent to the AI."
+						>
+							<Textarea
+								placeholder="Private notes for yourself. Never sent to the model."
+								rows={2}
+								value={input.myNotes}
+								onChange={(e) => setInput({ myNotes: e.target.value })}
 							/>
 						</FormField>
 					</fieldset>
@@ -573,15 +650,50 @@ export default function ConfigPanel() {
 	);
 }
 
+function LegendWithHelp({
+	icon: Icon,
+	label,
+	help,
+}: {
+	icon: React.ComponentType<{ className?: string }>;
+	label: string;
+	help?: string;
+}) {
+	return (
+		<legend className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+			<Icon className="size-3.5" />
+			{label}
+			{help && (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<button
+							type="button"
+							aria-label={`Help: ${label}`}
+							className="cursor-help text-muted-foreground/60 hover:text-muted-foreground"
+						>
+							<HelpCircle className="size-3.5" />
+						</button>
+					</TooltipTrigger>
+					<TooltipContent side="right" className="max-w-xs text-left">
+						{help}
+					</TooltipContent>
+				</Tooltip>
+			)}
+		</legend>
+	);
+}
+
 function FormField({
 	icon: Icon,
 	label,
 	required,
+	help,
 	children,
 }: {
 	icon: React.ComponentType<{ className?: string }>;
 	label: string;
 	required?: boolean;
+	help?: string;
 	children: React.ReactNode;
 }) {
 	return (
@@ -590,6 +702,22 @@ function FormField({
 				<Icon className="size-3.5 text-muted-foreground" />
 				{label}
 				{required && <span className="text-destructive">*</span>}
+				{help && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<button
+								type="button"
+								aria-label={`Help: ${label}`}
+								className="cursor-help text-muted-foreground/60 hover:text-muted-foreground"
+							>
+								<HelpCircle className="size-3.5" />
+							</button>
+						</TooltipTrigger>
+						<TooltipContent side="right" className="max-w-xs text-left">
+							{help}
+						</TooltipContent>
+					</Tooltip>
+				)}
 			</Label>
 			{children}
 		</div>

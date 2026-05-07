@@ -16,11 +16,19 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
 	}, [user, loading, router]);
 
 	if (loading) {
+		// `suppressHydrationWarning` covers DOM mutations from browser extensions
+		// (e.g. password managers) and the Cursor preview browser which inject
+		// data-* attributes onto live nodes between SSR and React hydration.
 		return (
-			<div className="flex h-screen w-full items-center justify-center bg-background">
-				<div className="flex flex-col items-center gap-4">
+			<div
+				className="flex h-screen w-full items-center justify-center bg-background"
+				suppressHydrationWarning
+			>
+				<div className="flex flex-col items-center gap-4" suppressHydrationWarning>
 					<Loader2 className="size-8 animate-spin text-primary" />
-					<p className="text-sm text-muted-foreground">Loading...</p>
+					<p className="text-sm text-muted-foreground" suppressHydrationWarning>
+						Loading...
+					</p>
 				</div>
 			</div>
 		);

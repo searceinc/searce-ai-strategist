@@ -1,5 +1,6 @@
 import type { DocumentData } from "firebase-admin/firestore";
 import { Timestamp } from "firebase-admin/firestore";
+import { migrateLegacyInput } from "./data/legacy-codes.js";
 
 /** Match client preview logic: prefer edited copy over generated. */
 export function sessionContentPreview(data: Record<string, unknown>): string {
@@ -34,11 +35,18 @@ function serializeField(value: unknown): unknown {
 	return value;
 }
 
-/** Deep-convert Firestore Timestamps for callable JSON response. */
+/**
+ * Deep-convert Firestore Timestamps for callable JSON response, then run the
+ * legacy → canonical migration on the embedded `input` payload so the UI sees
+ * the new field names regardless of when the session was first created.
+ */
 export function serializeSessionDocument(data: DocumentData): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(data)) {
 		out[key] = deepSerialize(value);
+	}
+	if (out.input && typeof out.input === "object") {
+		out.input = migrateLegacyInput(out.input as Parameters<typeof migrateLegacyInput>[0]);
 	}
 	return out;
 }

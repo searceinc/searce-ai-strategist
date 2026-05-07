@@ -6,163 +6,64 @@ import type {
 	SearceService,
 	StrategicAngle,
 } from "@/lib/types";
+import {
+	SHEET_INDUSTRIES,
+	INDUSTRY_CATEGORIES,
+	CATEGORY_SUBCATEGORIES,
+	type CategoryOption,
+	type IndustryOption,
+	type SubCategoryOption,
+} from "@/lib/sheet-taxonomy";
 
 // ─── Industries ─────────────────────────────────────────────────────────────
+//
+// Sheet 1 is the canonical source. Anything below the "Other industries"
+// divider is an extra not present in the workbook — kept so old sessions
+// don't 404 in the dropdown.
 
-export const INDUSTRIES = [
-	{ value: "TTL", label: "Travel, Transport & Logistics" },
-	{ value: "TSS", label: "Technology, Software & SaaS" },
-	{ value: "MIC", label: "Manufacturing, Industrial & Construction" },
-	{ value: "HLS", label: "Healthcare & Life Sciences" },
-	{ value: "FSI", label: "Financial Services & Insurance" },
-	{ value: "RCE", label: "Retail, CPG & E-commerce" },
-	{ value: "PSE", label: "Public Sector & Education" },
-	{ value: "NEU", label: "Energy & Utilities" },
-	{ value: "TMEG", label: "Telecom, Media & Gaming" },
-	{ value: "MISC", label: "Other Industries" },
-] as const;
+const SHEET_INDUSTRY_OPTIONS: IndustryOption[] = SHEET_INDUSTRIES;
+
+const EXTRA_INDUSTRY_OPTIONS: IndustryOption[] = [{ value: "MISC", label: "Other Industries" }];
+
+export const INDUSTRIES: ReadonlyArray<IndustryOption> = [
+	...SHEET_INDUSTRY_OPTIONS,
+	...EXTRA_INDUSTRY_OPTIONS,
+];
 
 export const INDUSTRY_LABELS: Record<string, string> = Object.fromEntries(
 	INDUSTRIES.map((i) => [i.value, i.label]),
 );
 
-// ─── Persona Functions & Sub-Functions ──────────────────────────────────────
+/** Sheet-driven only; used for cascading dropdowns. */
+export { INDUSTRY_CATEGORIES, CATEGORY_SUBCATEGORIES };
+export type { CategoryOption, SubCategoryOption };
 
-export const PERSONA_FUNCTIONS = [
-	{ value: "cxo", label: "CXO / Executive" },
-	{ value: "consulting", label: "Consulting" },
-	{ value: "data", label: "Data" },
-	{ value: "engineering", label: "Engineering" },
-	{ value: "entrepreneurship", label: "Entrepreneurship" },
-	{ value: "finance", label: "Finance" },
-	{ value: "hr", label: "Human Resources" },
-	{ value: "it", label: "Information Technology" },
-	{ value: "legal", label: "Legal" },
-	{ value: "marketing", label: "Marketing" },
-	{ value: "media-comms", label: "Media & Communication" },
-	{ value: "military-protective", label: "Military & Protective Services" },
-	{ value: "operations", label: "Operations" },
-	{ value: "product-management", label: "Product Management" },
-	{ value: "program-project-mgmt", label: "Program & Project Management" },
-	{ value: "purchasing", label: "Purchasing" },
-	{ value: "quality-assurance", label: "Quality Assurance" },
-	{ value: "research", label: "Research" },
-	{ value: "sales", label: "Sales" },
-	{ value: "customer-success", label: "Customer Success" },
-] as const;
+export function getCategoryOptions(industryCode: string): CategoryOption[] {
+	return INDUSTRY_CATEGORIES[industryCode] ?? [];
+}
 
-export const SUB_FUNCTIONS: Record<string, { value: string; label: string }[]> = {
-	cxo: [
-		{ value: "ceo", label: "CEO / Managing Director" },
-		{ value: "cto", label: "CTO / VP Engineering" },
-		{ value: "cio", label: "CIO / Chief Digital Officer" },
-		{ value: "cfo", label: "CFO / Finance Director" },
-		{ value: "cdo", label: "Chief Data Officer" },
-	],
-	consulting: [
-		{ value: "strategy-consulting", label: "Strategy Consulting" },
-		{ value: "tech-consulting", label: "Technology Consulting" },
-		{ value: "management-consulting", label: "Management Consulting" },
-	],
-	data: [
-		{ value: "data-engineering", label: "Data Engineering" },
-		{ value: "data-science", label: "Data Science" },
-		{ value: "data-analytics", label: "Data Analytics" },
-		{ value: "data-governance", label: "Data Governance" },
-	],
-	engineering: [
-		{ value: "cloud-ops", label: "Cloud Operations" },
-		{ value: "app-dev", label: "Application Development" },
-		{ value: "infrastructure", label: "Infrastructure" },
-		{ value: "devops", label: "DevOps / SRE" },
-		{ value: "platform-eng", label: "Platform Engineering" },
-	],
-	entrepreneurship: [
-		{ value: "founder", label: "Founder / Co-Founder" },
-		{ value: "startup-ops", label: "Startup Operations" },
-	],
-	finance: [
-		{ value: "fp-and-a", label: "FP&A" },
-		{ value: "accounting", label: "Accounting" },
-		{ value: "treasury", label: "Treasury" },
-		{ value: "finops", label: "FinOps" },
-	],
-	hr: [
-		{ value: "talent-acquisition", label: "Talent Acquisition" },
-		{ value: "people-ops", label: "People Operations" },
-		{ value: "learning-dev", label: "Learning & Development" },
-	],
-	it: [
-		{ value: "it-infrastructure", label: "IT Infrastructure" },
-		{ value: "cyber-security", label: "Cyber Security" },
-		{ value: "it-governance", label: "IT Governance" },
-		{ value: "enterprise-architecture", label: "Enterprise Architecture" },
-	],
-	legal: [
-		{ value: "compliance", label: "Compliance & Regulatory" },
-		{ value: "contracts", label: "Contracts & Procurement" },
-		{ value: "ip-law", label: "IP & Technology Law" },
-	],
-	marketing: [
-		{ value: "demand-gen", label: "Demand Generation" },
-		{ value: "product-marketing", label: "Product Marketing" },
-		{ value: "brand-marketing", label: "Brand & Communications" },
-		{ value: "growth", label: "Growth Marketing" },
-	],
-	"media-comms": [
-		{ value: "content-strategy", label: "Content Strategy" },
-		{ value: "pr", label: "Public Relations" },
-		{ value: "corporate-comms", label: "Corporate Communications" },
-	],
-	"military-protective": [
-		{ value: "security-ops", label: "Security Operations" },
-		{ value: "risk-management", label: "Risk Management" },
-	],
-	operations: [
-		{ value: "supply-chain", label: "Supply Chain" },
-		{ value: "logistics", label: "Logistics" },
-		{ value: "procurement", label: "Procurement" },
-		{ value: "business-ops", label: "Business Operations" },
-	],
-	"product-management": [
-		{ value: "product-strategy", label: "Product Strategy" },
-		{ value: "product-owner", label: "Product Owner" },
-		{ value: "technical-pm", label: "Technical Product Manager" },
-	],
-	"program-project-mgmt": [
-		{ value: "program-mgmt", label: "Program Management" },
-		{ value: "project-mgmt", label: "Project Management" },
-		{ value: "pmo", label: "PMO" },
-	],
-	purchasing: [
-		{ value: "strategic-sourcing", label: "Strategic Sourcing" },
-		{ value: "vendor-mgmt", label: "Vendor Management" },
-	],
-	"quality-assurance": [
-		{ value: "qa-testing", label: "QA & Testing" },
-		{ value: "process-quality", label: "Process Quality" },
-	],
-	research: [
-		{ value: "r-and-d", label: "R&D" },
-		{ value: "market-research", label: "Market Research" },
-		{ value: "innovation", label: "Innovation" },
-	],
-	sales: [
-		{ value: "enterprise-sales", label: "Enterprise Sales" },
-		{ value: "inside-sales", label: "Inside Sales" },
-		{ value: "sales-ops", label: "Sales Operations" },
-		{ value: "account-management", label: "Account Management" },
-	],
-	"customer-success": [
-		{ value: "onboarding", label: "Customer Onboarding" },
-		{ value: "support", label: "Customer Support" },
-		{ value: "success-management", label: "Success Management" },
-	],
-};
+export function getSubCategoryOptions(industryCode: string, category: string): SubCategoryOption[] {
+	return CATEGORY_SUBCATEGORIES[industryCode]?.[category] ?? [];
+}
 
-export const FUNCTION_LABELS: Record<string, string> = Object.fromEntries(
-	PERSONA_FUNCTIONS.map((f) => [f.value, f.label]),
-);
+/** Aggregated label maps (id → display label). */
+export const CATEGORY_LABELS: Record<string, string> = (() => {
+	const out: Record<string, string> = {};
+	for (const cats of Object.values(INDUSTRY_CATEGORIES)) {
+		for (const c of cats) out[c.value] = c.label;
+	}
+	return out;
+})();
+
+export const SUB_CATEGORY_LABELS: Record<string, string> = (() => {
+	const out: Record<string, string> = {};
+	for (const byCat of Object.values(CATEGORY_SUBCATEGORIES)) {
+		for (const subs of Object.values(byCat)) {
+			for (const s of subs) out[s.value] = s.label;
+		}
+	}
+	return out;
+})();
 
 // ─── Cloud Ecosystems ───────────────────────────────────────────────────────
 

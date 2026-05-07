@@ -1,124 +1,177 @@
-import { INDUSTRY_LABELS } from "./labels.js";
+/**
+ * Sheet-driven pain-point and use-case lookups.
+ *
+ * The hardcoded persona-function map this file used to expose has been replaced
+ * with the workbook-grounded `industry → category → sub-category` keying from
+ * Sheets 3 and 4. Each lookup returns:
+ *   - detailed pain points (verbose, sub-category-specific)
+ *   - converged pain points (deduped buckets across the workbook)
+ *   - the matching detailed + converged use cases
+ *   - the Searce practices that score >= 2 on the relevant DPPIDs (Sheet 6)
+ *
+ * Falls back gracefully if the sub-category isn't yet in the sheet:
+ *   subCategory match → category match → industry match → empty bundle.
+ */
 
-const PAIN_POINTS: Record<string, (industryName: string) => string[]> = {
-	cxo: (ind) => [
-		`Lack of unified digital transformation strategy across ${ind} business units`,
-		"Difficulty quantifying ROI of cloud and AI investments to the board",
-		"Siloed technology decisions leading to redundant spend and complexity",
-		"Inability to attract and retain top digital talent",
-	],
-	consulting: (ind) => [
-		`Clients in ${ind} demand faster time-to-value from transformation engagements`,
-		"Difficulty differentiating advisory services with tangible tech outcomes",
-		"Lack of access to proven implementation frameworks and case studies",
-	],
-	data: (ind) => [
-		`Data silos across ${ind} preventing unified analytics and decision-making`,
-		"Legacy data warehouses unable to handle real-time processing demands",
-		"Lack of data governance and quality frameworks slowing AI adoption",
-		"Difficulty scaling data pipelines to meet growing business needs",
-	],
-	engineering: (ind) => [
-		`Managing legacy infrastructure that can't scale to meet ${ind} demands`,
-		"Struggling with multi-cloud complexity and lack of unified visibility",
-		"High operational overhead from managing on-premise data centers",
-		"Slow release cycles due to lack of modern CI/CD and platform engineering",
-	],
-	entrepreneurship: (ind) => [
-		"Need to build scalable cloud infrastructure from day one without overspending",
-		"Difficulty choosing the right cloud architecture for rapid growth",
-		`Finding the right technology partner who understands ${ind} startup challenges`,
-	],
-	sales: (ind) => [
-		`Difficulty accessing real-time prospect intelligence for ${ind} accounts`,
-		"Lack of data-driven insights to personalize outreach at scale",
-		"Long sales cycles due to inability to demonstrate clear ROI quickly",
-		"Siloed CRM data preventing unified view of customer journey",
-	],
-	marketing: (ind) => [
-		"Inability to measure true campaign ROI across digital channels",
-		"Fragmented marketing tech stack limiting personalization capabilities",
-		`Challenge reaching ${ind} decision-makers with relevant messaging`,
-		"Lack of AI-powered attribution modeling for accurate budget allocation",
-	],
-	it: (ind) => [
-		`Managing legacy infrastructure that can't scale to meet ${ind} demands`,
-		"Struggling with multi-cloud complexity and lack of unified visibility",
-		"Security vulnerabilities from outdated systems and manual patching processes",
-		"High operational overhead from managing on-premise data centers",
-	],
-	finance: () => [
-		"Manual financial processes limiting real-time visibility and forecasting",
-		"Compliance burden from fragmented data across legacy systems",
-		"Inability to optimize cloud spending and demonstrate IT ROI",
-		"Slow month-end close processes due to data reconciliation challenges",
-	],
-	legal: (ind) => [
-		"Difficulty ensuring compliance with evolving data privacy regulations",
-		"Manual contract review processes slowing deal velocity",
-		`Regulatory complexity in ${ind} increasing legal risk exposure`,
-	],
-	"media-comms": (ind) => [
-		"Fragmented content workflows limiting speed and quality of output",
-		"Inability to measure content performance across channels in real-time",
-		`Difficulty maintaining consistent messaging across ${ind} campaigns`,
-	],
-	"military-protective": () => [
-		"Legacy security systems unable to detect modern cyber threats",
-		"Need for real-time threat intelligence and automated response capabilities",
-		"Compliance requirements demanding continuous monitoring and audit trails",
-	],
-	operations: (ind) => [
-		`Operational inefficiencies costing ${ind} organizations millions annually`,
-		"Lack of real-time visibility across supply chain and logistics",
-		"Manual processes preventing scale and agility",
-		"Difficulty predicting demand and optimizing resource allocation",
-	],
-	"product-management": (ind) => [
-		"Lack of data-driven insights to prioritize product roadmap decisions",
-		"Slow feedback loops between customer usage data and product iterations",
-		`Difficulty scaling product infrastructure to meet ${ind} growth demands`,
-	],
-	"program-project-mgmt": () => [
-		"Lack of real-time visibility into project health and resource utilization",
-		"Manual reporting processes consuming valuable project management time",
-		"Difficulty managing cross-functional dependencies in cloud transformation programs",
-	],
-	purchasing: () => [
-		"Fragmented vendor landscape making cloud procurement decisions complex",
-		"Inability to benchmark cloud spending against industry standards",
-		"Manual procurement workflows slowing technology acquisition",
-	],
-	"quality-assurance": () => [
-		"Manual testing processes unable to keep pace with rapid release cycles",
-		"Lack of automated quality gates in CI/CD pipelines",
-		"Difficulty ensuring performance and reliability at scale",
-	],
-	research: (ind) => [
-		"Slow access to compute resources limiting research iteration speed",
-		"Data silos preventing cross-functional research collaboration",
-		`Need for scalable ML infrastructure to accelerate ${ind} innovation`,
-	],
-	hr: () => [
-		"Challenge attracting top talent due to outdated technology perception",
-		"Manual onboarding processes reducing new hire productivity",
-		"Lack of data-driven insights for workforce planning",
-		"Difficulty measuring employee engagement and retention drivers",
-	],
-	"customer-success": () => [
-		"Reactive customer support instead of proactive engagement",
-		"Inability to predict churn and take preventive action",
-		"Siloed customer data preventing unified service experience",
-		"Manual processes limiting ability to scale support operations",
-	],
+import { SHEET_PAIN_POINTS, type SheetPainPointRow } from "./sheet-pain-points.js";
+import {
+	SHEET_PRACTICE_RELEVANCE,
+	type PracticeRelevanceRow,
+	type SearcePracticeKey,
+} from "./sheet-practice-relevance.js";
+import { CATEGORY_LABELS, SUB_CATEGORY_LABELS, INDUSTRY_LABELS } from "./labels.js";
+import type { SheetPainPointBundle } from "../types.js";
+
+const PRACTICE_LABELS: Record<SearcePracticeKey, string> = {
+	ai: "Applied AI",
+	da: "Data & Analytics",
+	infraMod: "Infrastructure Modernization",
+	cms: "Cloud Managed Services",
+	li: "Location Intelligence",
+	fow: "Future of Work",
 };
 
-export function getFunctionPainPoints(
-	personaFunction: string,
-	_subFunction: string,
+const PRACTICE_KEYS: SearcePracticeKey[] = ["ai", "da", "infraMod", "cms", "li", "fow"];
+
+const PRACTICE_BY_DPP_ID: Map<number, PracticeRelevanceRow> = new Map(
+	SHEET_PRACTICE_RELEVANCE.map((row) => [row.dppId, row]),
+);
+
+function deriveRelevantPractices(rows: SheetPainPointRow[]): string[] {
+	const aggregated: Record<SearcePracticeKey, number> = {
+		ai: 0,
+		da: 0,
+		infraMod: 0,
+		cms: 0,
+		li: 0,
+		fow: 0,
+	};
+	let counted = 0;
+	for (const row of rows) {
+		const score = PRACTICE_BY_DPP_ID.get(row.dppId);
+		if (!score) continue;
+		counted++;
+		for (const key of PRACTICE_KEYS) aggregated[key] += score[key];
+	}
+	if (counted === 0) return [];
+	// Threshold: average score >= 1.5 across the matched DPPIDs means Searce
+	// genuinely delivers in this practice for these pain points. Any practice
+	// below that line is omitted so the model can't claim it.
+	return PRACTICE_KEYS.filter((key) => aggregated[key] / counted >= 1.5).map(
+		(key) => PRACTICE_LABELS[key],
+	);
+}
+
+function bundle(
 	industryCode: string,
-): string[] {
-	const industryName = INDUSTRY_LABELS[industryCode] ?? "your industry";
-	const builder = PAIN_POINTS[personaFunction] ?? PAIN_POINTS.it!;
-	return builder(industryName);
+	category: string,
+	subCategory: string,
+	rows: SheetPainPointRow[],
+): SheetPainPointBundle {
+	const detailedSeen = new Set<string>();
+	const convergedSeen = new Set<string>();
+	const detailedUseCaseSeen = new Set<string>();
+	const convergedUseCaseSeen = new Set<string>();
+
+	const detailed: string[] = [];
+	const converged: string[] = [];
+	const detailedUseCases: string[] = [];
+	const convergedUseCases: string[] = [];
+
+	for (const row of rows) {
+		if (!detailedSeen.has(row.detailed)) {
+			detailedSeen.add(row.detailed);
+			detailed.push(row.detailed);
+		}
+		if (!convergedSeen.has(row.converged)) {
+			convergedSeen.add(row.converged);
+			converged.push(row.converged);
+		}
+		if (!detailedUseCaseSeen.has(row.detailedUseCase)) {
+			detailedUseCaseSeen.add(row.detailedUseCase);
+			detailedUseCases.push(row.detailedUseCase);
+		}
+		if (!convergedUseCaseSeen.has(row.convergedUseCase)) {
+			convergedUseCaseSeen.add(row.convergedUseCase);
+			convergedUseCases.push(row.convergedUseCase);
+		}
+	}
+
+	return {
+		industryCode,
+		category,
+		subCategory,
+		categoryLabel: CATEGORY_LABELS[category] ?? category,
+		subCategoryLabel: SUB_CATEGORY_LABELS[subCategory] ?? subCategory,
+		fullId: rows[0]?.fullId ?? null,
+		detailed,
+		converged,
+		detailedUseCases,
+		convergedUseCases,
+		relevantPractices: deriveRelevantPractices(rows),
+	};
+}
+
+/**
+ * Returns the sheet-driven pain points + use cases for the supplied targeting.
+ *
+ * Resolution order:
+ *   1. Exact (industry + category + sub-category)
+ *   2. Industry + category (any sub-category)
+ *   3. Industry only
+ *   4. Empty bundle (caller should treat as "benchmark only")
+ */
+export function getSheetPainPoints(
+	industryCode: string,
+	category: string,
+	subCategory: string,
+): SheetPainPointBundle {
+	if (industryCode && category && subCategory) {
+		const exact = SHEET_PAIN_POINTS.filter(
+			(r) =>
+				r.industryCode === industryCode &&
+				r.category === category &&
+				r.subCategory === subCategory,
+		);
+		if (exact.length > 0) return bundle(industryCode, category, subCategory, exact);
+	}
+
+	if (industryCode && category) {
+		const cat = SHEET_PAIN_POINTS.filter(
+			(r) => r.industryCode === industryCode && r.category === category,
+		);
+		if (cat.length > 0) return bundle(industryCode, category, "", cat);
+	}
+
+	if (industryCode) {
+		const ind = SHEET_PAIN_POINTS.filter((r) => r.industryCode === industryCode);
+		if (ind.length > 0) return bundle(industryCode, "", "", ind);
+	}
+
+	return {
+		industryCode,
+		category,
+		subCategory,
+		categoryLabel: CATEGORY_LABELS[category] ?? "",
+		subCategoryLabel: SUB_CATEGORY_LABELS[subCategory] ?? "",
+		fullId: null,
+		detailed: [],
+		converged: [],
+		detailedUseCases: [],
+		convergedUseCases: [],
+		relevantPractices: [],
+	};
+}
+
+/** Friendly resolved labels for prompt headers. */
+export function resolveTaxonomyLabels(
+	industryCode: string,
+	category: string,
+	subCategory: string,
+): { industry: string; category: string; subCategory: string } {
+	return {
+		industry: INDUSTRY_LABELS[industryCode] ?? industryCode,
+		category: CATEGORY_LABELS[category] ?? category,
+		subCategory: SUB_CATEGORY_LABELS[subCategory] ?? subCategory,
+	};
 }

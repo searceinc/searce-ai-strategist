@@ -1,366 +1,208 @@
 import type { GenerationInput } from "../types.js";
 
 /**
- * Structured output instructions per content format.
- * Models must follow section labels exactly so sales can copy/paste into tools.
+ * Per-format CONTENT guidance.
+ *
+ * Structural concerns (paragraph count, subject options, marker layout,
+ * version split, sequence headers) are enforced by the JSON response schema
+ * in `services/output-schemas.ts` and the assembler in
+ * `services/output-assembler.ts`. So this file only describes WHAT each
+ * paragraph should accomplish per format, not HOW to format it.
  */
 export function buildFormatInstructions(input: GenerationInput): string {
 	switch (input.selectedFormat) {
 		case "cold_email":
-			return coldEmailStructure();
+			return coldEmailContent();
 		case "sales_email":
-			return salesEmailStructure();
+			return salesEmailContent();
 		case "nurture_email":
-			return nurtureEmailStructure(input.nurtureTemplate);
+			return nurtureEmailContent(input.nurtureTemplate);
 		case "email_sequence":
-			return emailSequenceStructure(input.emailSequenceLength);
+			return emailSequenceContent(input.emailSequenceLength);
 		case "linkedin_inmail":
-			return linkedinInmailStructure(input.linkedinInmailVariation);
+			return linkedinInmailContent(input.linkedinInmailVariation);
 		case "linkedin_conversational_ad":
-			return linkedinConversationAdStructure();
+			return linkedinConversationAdContent();
 		default:
-			return coldEmailStructure();
+			return coldEmailContent();
 	}
 }
 
-const STRUCTURE_RULES = `
-STRUCTURE RULES (mandatory):
-- Output plain text only. No preamble ("Here is your email").
-- Start each major block with the EXACT label lines shown below (e.g. "SUBJECT:", "---", "EMAIL 1 —").
-- Use real names only when provided; otherwise [FirstName], [CompanyName], [Job Title], [Your Name] placeholders.
-- Weave metrics and proof into sentences; never paste raw Tavily bullets into the body.
-- End with a "VERIFIED SEARCE RESOURCES" section listing only URLs from the verified case study list (or the hub URL).
+const COMMON_PARAGRAPH_GUIDANCE = `
+PARAGRAPH GUIDANCE FOR \`longParagraphs\` (single-email + sequence emails):
+- Aim for 3–4 paragraphs. Each paragraph 3–4 short sentences (each sentence ≤ 18 words). Total ≤ ~150 words.
+- Recommended rhythm:
+  • P1 (1–2 sentences): the hook. Reference one specific sub-industry signal. No "I hope this finds you well", no "I came across your profile", no preamble.
+  • P2 (3–4 sentences): the specific pain in this sub-category. Quantify the cost of the status quo where possible.
+  • P3 (optional): EITHER a 2–3-bullet "Searce Transformation" mini-block (write each bullet on its own line starting with "•", e.g. "• Legacy: 10 minutes per document.", "• With Searce: 30–45 seconds.", "• Result: 99% accuracy."), OR one verified Searce client outcome as a Markdown link [Client](url). Use ONLY practices from ALLOWED SEARCE PRACTICES.
+  • P4 (1–2 sentences): one peer-style low-friction ask. NEVER "book a demo" or "schedule a meeting".
+- ONE Searce anchor max across the whole body. Zero external-source hyperlinks.
+
+PARAGRAPH GUIDANCE FOR \`shortParagraphs\`:
+- 2–3 paragraphs total. Same beats, ruthlessly compressed. Total ≤ ~80 words.
+  • P1 (1 sentence): hook.
+  • P2 (1–2 sentences): the pain + ONE Searce proof anchored as Markdown link.
+  • P3 (optional, 1 sentence): low-friction CTA.
+
+DO NOT include "Hi [FirstName]," or "[Your Name] | Searce" inside any paragraph — the server adds those automatically.
 `;
 
-function coldEmailStructure(): string {
+function coldEmailContent(): string {
 	return `## COLD EMAIL (first-touch outbound)
 
-${STRUCTURE_RULES}
+${COMMON_PARAGRAPH_GUIDANCE}
 
-Use this layout:
-
-SUBJECT:
-<under 50 characters, pattern-interrupt, specific to their world>
-
----
-GREETING:
-Dear [FirstName],
-
-OPENING PARAGRAPH:
-Your name, title at Searce, one line on how Searce helps organizations like [CompanyName] in their industry (transformation, compliance, or speed — pick what fits research).
-
-WHY YOU PARAGRAPH:
-"I am reaching out to you specifically because…" Tie to 2–3 role-critical themes as short paragraphs (blank line between each). Mirror the "areas critical to your role" pattern.
-
-PROOF LINE:
-One concrete client outcome from verified case studies only (company type + metric). No invented names.
-
-CTA:
-Single low-friction ask (e.g. 15-minute virtual meeting next week). Respect their time.
-
-SIGN-OFF:
-Regards,
-[Your Name] | Searce
-
-VERIFIED SEARCE RESOURCES:
-- <bullets with real URLs only>
-
-LENGTH: roughly 180–220 words. Professional, human, zero clichés ("I hope this email finds you well").`;
+ANGLE FOR THIS FORMAT:
+- P1 = a sharp opener tied to a real signal in their sub-industry (recent news, sub-category dynamic, or a peer's situation).
+- P2 = the sub-category-specific pain, mapped to ONE verified Searce client outcome (anchor on the client name).
+- P3 = a peer-style low-friction ask ("worth a 10-minute exchange of notes?" type).
+`;
 }
 
-function salesEmailStructure(): string {
-	return `## SALES EMAIL (solution-oriented, post-discovery tone)
+function salesEmailContent(): string {
+	return `## SALES EMAIL (post-discovery, solution-oriented)
 
-${STRUCTURE_RULES}
+${COMMON_PARAGRAPH_GUIDANCE}
 
-Use this layout:
-
-SUBJECT:
-<outcome-focused, specific>
-
----
-GREETING:
-Hi [FirstName],
-
-THANK YOU / CONTEXT:
-Thank them for time on the call (or assume recent conversation). One line re-introducing Searce and partnership with Google Cloud / AWS as relevant.
-
-CAPABILITIES SECTION:
-Intro line: "As a proud partner of Google Cloud, AWS, we offer:" then a labeled list (each on its own line) drawing from actual Searce services that fit the brief — e.g.
-• Cloud Consulting: …
-• Cloud Managed Services: …
-• Data Analytics: …
-• AI & ML: …
-• DevOps: …
-• Location Intelligence: …
-• Infrastructure Migration: …
-• Data Migration: …
-(Include only pillars that fit; 5–8 bullets max.)
-
-CTA BLOCK:
-30-minute meeting suggestion OR direct line if provided in notes; optional one line on brochure / one-pager if appropriate.
-
-CLOSING:
-Best regards,
-[Your Name] | Searce
-
-VERIFIED SEARCE RESOURCES:
-- <bullets with real URLs only>
-
-LENGTH: roughly 200–280 words. Confident, specific, no hedge words.`;
+ANGLE FOR THIS FORMAT:
+- P1 = reference the recent conversation or a shared signal. No corporate preamble.
+- P2 = ONE relevant Searce practice + one verified outcome anchored on the client name. Use ONLY practices from ALLOWED SEARCE PRACTICES. If you genuinely need a transformation contrast, you may render it inline as up to 2 short bullets using "•" (each ≤ 12 words) — but bullets count toward the word total and the sentence cap.
+- P3 = a specific, low-friction ask: 30-minute working session OR send a one-pager.
+`;
 }
 
-function nurtureEmailStructure(template: GenerationInput["nurtureTemplate"]): string {
-	const t1 = `TEMPLATE 1 — INTRODUCTION & RELEVANCE
-
-SUBJECT:
-<conversational, value-tinged>
-
----
-GREETING:
-Dear [FirstName],
-
-BODY:
-- Intro: your name, Senior Client Engagement Specialist (or appropriate title) at Searce; one line specialization for their industry.
-- Bridge: "I am reaching out to you specifically because…" + 2–3 short paragraphs on areas that map to their function (e.g. operational efficiency, data foundation for AI).
-- Proof: one verified outcome sentence (regional peer / sector-appropriate).
-- CTA: brief 15-minute virtual meeting.
-
-SIGN-OFF:
-Regards,
-[Your Name] | Searce`;
-
-	const t2 = `TEMPLATE 2 — POST-CALL / CAPABILITIES
-
-SUBJECT:
-<reference prior conversation or shared goal>
-
----
-GREETING:
-Hi [FirstName],
-
-OPENING:
-Thank you for the conversation; re-introduce Searce and cloud partnership angle.
-
-SERVICE PILLARS:
-Bullet list of offerings (Cloud Consulting, Managed Services, Data Analytics, AI & ML, DevOps, Location Intelligence, Infra Migration, Data Migration) — tailor descriptions to persona; omit irrelevant lines.
-
-CTA:
-30-minute meeting window + optional direct phone if in campaign notes; mention attachment/brochure only if appropriate.
-
-CLOSING:
-Best regards,
-[Your Name] | Searce`;
-
-	const t3 = `TEMPLATE 3 — INDUSTRY / STRATEGIC HOOK
-
-SUBJECT:
-<provocative but professional>
-
----
-GREETING:
-Hi [FirstName],
-
-BODY:
-- Open with industry shift (e.g. API-first, data-rich economy, digital resilience) in 2–3 sentences.
-- Position Searce with verified client types only (no invented logos).
-- Tight CTA: ~10-minute intro, specific day optional.
-
-CLOSING:
-Best,
-[Your Name] | Searce`;
-
-	const chosen = template === "1" ? t1 : template === "2" ? t2 : t3;
+function nurtureEmailContent(template: GenerationInput["nurtureTemplate"]): string {
+	const angleByTemplate = {
+		"1": `Template 1 — INTRODUCTION & RELEVANCE:
+- P1 = open with a real signal (no "I came across…").
+- P2 = sub-category-specific challenge → Searce capability you can actually prove, anchored on a verified client name.
+- P3 = low-friction CTA.`,
+		"2": `Template 2 — POST-CALL / CAPABILITIES:
+- P1 = thank-you that reuses one specific detail they said.
+- P2 = ONE relevant Searce practice + verified outcome anchored on the client name. Use only ALLOWED SEARCE PRACTICES.
+- P3 = low-friction CTA (30-min working session OR a one-pager).`,
+		"3": `Template 3 — INDUSTRY / STRATEGIC HOOK:
+- P1 = one specific industry shift (not generic) — straight in.
+- P2 = position Searce only via a verified client type, with the verified outcome anchored on the client name.
+- P3 = 10-minute intro ask.`,
+	} as const;
 
 	return `## NURTURE EMAIL (value-first; template ${template})
 
-${STRUCTURE_RULES}
+${COMMON_PARAGRAPH_GUIDANCE}
 
-${chosen}
-
-VERIFIED SEARCE RESOURCES:
-- <bullets with real URLs only>
-
-LENGTH: under ~220 words. Warm, human, not salesy.`;
+ANGLE FOR THIS FORMAT:
+${angleByTemplate[template] ?? angleByTemplate["1"]}
+`;
 }
 
-/** Arc for multi-touch manufacturing-style sequence; adapt industry/case names to verified studies + research. */
-const SEQUENCE_EMAIL_BLUEPRINTS: readonly string[] = [
-	`EMAIL 1 — THE "HINDSIGHT" TRAP
-CASE REFERENCE LINE: <use one verified client story; no invented names>
-SUBJECT: <Does [CompanyName] manage by real-time data or by hindsight?>
-PREVIEW TEXT: <~80 chars for inbox preview>
-BODY:
-Opening question about operational visibility / reporting lag.
-Contrast "hindsight management" with a verified before→after metric from a similar engagement.
-CTA LINE: [Book a Strategy Exchange] or equivalent low-friction label`,
-
-	`EMAIL 2 — THE "INFRASTRUCTURE ANCHOR"
-CASE REFERENCE LINE: <verified proof>
-SUBJECT: <Making [CompanyName]'s infrastructure launch-ready>
-PREVIEW TEXT: <legacy vs speed to market>
-BODY:
-Provocative question on provisioning / launch speed.
-Narrative: secure cloud foundation, team shifted from maintenance to innovation — use verified metrics only.
-CTA LINE: [Schedule an Infrastructure Briefing]`,
-
-	`EMAIL 3 — THE "PREDICTIVE" EDGE
-CASE REFERENCE LINE: <verified proof>
-SUBJECT: <Reducing unplanned downtime / operational risk at [CompanyName]>
-PREVIEW TEXT: <assets, cost, productivity angle>
-BODY:
-Question on predicting failures before they happen.
-Story: monitoring at scale, remaining useful life / cost reduction — verified numbers only.
-CTA LINE: [Request a Predictive Blueprint Session]`,
-
-	`EMAIL 4 — THE "DOCUMENTATION" BOTTLENECK
-CASE REFERENCE LINE: <verified proof>
-SUBJECT: <Reclaiming engineering hours at [CompanyName]>
-PREVIEW TEXT: <automation of manual work>
-BODY:
-Question on innovation pipeline if manual work disappeared.
-AI/automation outcome with verified metric.
-CTA LINE: [Schedule an Automation Briefing]`,
-
-	`EMAIL 5 — THE STRATEGIC CLOSER
-CASE REFERENCE LINE: <verified proof>
-SUBJECT: <Short window to accelerate [CompanyName]'s roadmap?>
-PREVIEW TEXT: <data-driven leadership gap>
-BODY:
-Future-looking stakes; compound advantage; verified sector outcomes.
-CTA LINE: [Schedule an Executive Briefing]`,
-
-	`EMAIL 6 — THE "COST OF INACTION" CHECK-IN
-CASE REFERENCE LINE: <pattern across verified wins>
-SUBJECT: <Is status quo becoming too expensive?>
-PREVIEW TEXT: <2026 operational goals>
-BODY:
-Candid question on margin lost to inefficiency; tie back to earlier themes with verified examples only.
-CTA LINE: [Re-open the Strategy Discussion]`,
-];
-
-function emailSequenceStructure(length: GenerationInput["emailSequenceLength"]): string {
+function emailSequenceContent(length: GenerationInput["emailSequenceLength"]): string {
 	const n = length;
-	const blocks = SEQUENCE_EMAIL_BLUEPRINTS.slice(0, n).join("\n\n---\n\n");
+	const beats: Record<number, string> = {
+		1: `EMAIL 1 — Hindsight trap: open with a daily-reality question for a [Job Title] in this sub-category about reporting lag / operational visibility. Pain → ONE verified Searce before/after metric anchored on the client name. CTA = peer-style ask.`,
+		2: `EMAIL 2 — Infrastructure anchor: open with one operational/strategic constraint a [Job Title] lives with, framed as a provocative question. Tell ONE secure cloud foundation outcome from a verified case (Searce anchor). CTA = peer-style ask.`,
+		3: `EMAIL 3 — Predictive edge: tie the [Job Title]'s asset/risk reality to predicting failures before they happen. ONE verified monitoring-at-scale outcome (anchor on client name). CTA = peer-style ask.`,
+		4: `EMAIL 4 — Documentation bottleneck: what would the [Job Title] do with reclaimed hours? ONE verified AI/automation outcome with anchor on client name. CTA = peer-style ask.`,
+		5: `EMAIL 5 — Strategic closer: tie to a strategic objective the [Job Title] is measured on this year. Compound advantage from ONE verified sub-industry outcome. CTA = peer-style ask.`,
+		6: `EMAIL 6 — Cost of inaction (shortest, ≤ 60 words): candid question on margin lost to inefficiency, tied to a current operating constraint. ONE verified Searce example. CTA = peer-style ask.`,
+	};
+
+	const beatsList = Array.from({ length: n }, (_, i) => beats[i + 1] ?? "")
+		.filter(Boolean)
+		.join("\n");
 
 	return `## EMAIL SEQUENCE (${n} emails)
 
-${STRUCTURE_RULES}
+For \`emails\`, output exactly ${n} email objects. Each email follows the same paragraph rhythm as a single email:
 
-Generate exactly ${n} separate emails. Separate each email with a line containing only: ---
+${COMMON_PARAGRAPH_GUIDANCE}
 
-For EACH email use this skeleton (adapt titles and angles to the target industry and verified case studies):
+PER-EMAIL ANGLES (apply each beat to the matching email index):
+${beatsList}
 
-${blocks}
+OPTIONAL \`cadenceLine\` field: a single positive-string cadence suggestion like "Day 1 / Day 4 / Day 7 / Day 14 / Day 21". Do NOT prefix with "-" or any other character. Leave empty if unsure.
 
-After EMAIL ${n}, add:
-
-VERIFIED SEARCE RESOURCES:
-- <bullets with real URLs only>
-
-RULES:
-- Each email: distinct hook; progressive story; never desperate tone.
-- ~150–200 words per email unless EMAIL 6 is shorter (~130).
-- Spacing note at top: suggest Day 1, Day 4, Day 7… as guidance only (plain text line).`;
+PER-EMAIL RULES:
+- Each email needs a DISTINCT hook AND distinct persona detail in P1 (bake the [Job Title] reality into the first sentence — never label it).
+- Per-email word total: ≤ ~150 words (the closing email may run ≤ ~95 words).
+- ONE Searce anchor per email max. No external-source anchors.
+- 3 subject options per email (the first email may use 4).
+`;
 }
 
-function linkedinInmailStructure(variation: GenerationInput["linkedinInmailVariation"]): string {
-	const v1 = `VARIATION 1 — STRATEGIC LEADERSHIP (job-title centric)
+function linkedinInmailContent(variation: GenerationInput["linkedinInmailVariation"]): string {
+	const angleByVariation = {
+		"1": `Variation 1 — STRATEGIC LEADERSHIP (job-title centric):
+- P1 = sharp [Job Title]-centric contrast on AI-native vs working-with-AI.
+- P2 = one insight tied to this sub-category + ONE verified Searce outcome anchored on the client name.
+- P3 = book a 1:1 OR reply with availability.`,
+		"2": `Variation 2 — VIP / QUIET 1:1:
+- P1 = acknowledge noise at large events; offer a dedicated 1:1 tied to one sub-category challenge.
+- P2 = up to TWO bullets using "•" for demos / strategy / thought-leadership offers (each ≤ 12 words). Bullets count toward sentence cap.
+- P3 = ask to reserve a 20-minute slot.`,
+	} as const;
 
-SUBJECT:
-<short; e.g. AI roadmap / event hook from notes>
+	return `## LINKEDIN INMAIL (variation ${variation})
 
----
-BODY:
-Hi [First Name],
+${COMMON_PARAGRAPH_GUIDANCE}
 
-Opening: As a [Job Title], contrast "working with AI" vs being AI-native (one sharp line).
+LENGTH OVERRIDE FOR INMAIL:
+- \`longParagraphs\` total: ≤ ~110 words. 3 paragraphs is usually right.
+- \`shortParagraphs\` total: ≤ ~55 words.
+- Native to LinkedIn. No "I came across your profile."
 
-VALUE: One insight + optional assessment / benchmark mention from notes.
-
-EVENT / BOOTH (if in notes): What Searce brings — use 3 short bullets (e.g. agentic AI, industry demos, lightning talk).
-
-CTA: Book 1:1 or reply with availability.
-
-Best,
-[Your Name] | Searce`;
-
-	const v2 = `VARIATION 2 — VIP / QUIET 1:1
-
-SUBJECT:
-<e.g. Your 2026 strategy at [Event]>
-
----
-BODY:
-Hi [First Name],
-
-Acknowledge noise at large events; offer dedicated 1:1 space for [Company Name] (from notes).
-
-BULLETS: Use checkmark-style lines for demos, strategy sessions, thought leadership.
-
-CTA: Ask to reserve a 20-minute slot.
-
-Best,
-[Your Name] | Searce`;
-
-	const chosen = variation === "1" ? v1 : v2;
-
-	return `## LINKEDIN INMAIL
-
-${STRUCTURE_RULES}
-
-${chosen}
-
-VERIFIED SEARCE RESOURCES:
-- <bullets with real URLs only>
-
-LENGTH: under ~150 words. Short paragraphs; native to LinkedIn; no "I came across your profile."`;
+ANGLE FOR THIS VARIATION:
+${angleByVariation[variation] ?? angleByVariation["1"]}
+`;
 }
 
-function linkedinConversationAdStructure(): string {
+/**
+ * Conversation Ad still uses text-mode generation (it has a branching
+ * multi-message structure that doesn't fit the single/sequence schema). The
+ * compliance-retry loop handles it.
+ */
+function linkedinConversationAdContent(): string {
 	return `## LINKEDIN CONVERSATION AD (Sponsored Messaging — choose-your-own-path)
 
-Reference format: LinkedIn Conversation Ads (Sponsored Messaging) — https://business.linkedin.com/advertise/ads/sponsored-messaging/conversation-ads — member-initiated feel, multiple CTA buttons, choose-your-own-path branching.
-
-${STRUCTURE_RULES}
-
-Output this structure:
+This format uses text mode (not the single-email schema). Output the structure below, with each MESSAGE as natural prose. NO structural labels other than the MESSAGE / BUTTON markers.
 
 CONVERSATION AD — OVERVIEW
-<Banner headline + one line value prop — under 70 characters for headline if possible>
+Banner headline + one-line value prop. Headline < 70 chars.
 
 ---
 MESSAGE 1 (OPENING)
-<body: 2–3 sentences, sharp hook or stat; mobile-first>
+Two to three sentences, sharp hook or stat (in plain prose — never link external sources). Mobile-first.
 
 BUTTON A: <under 25 chars, e.g. "Tell me more">
 BUTTON B: <under 25 chars, e.g. "Not for us">
 
 ---
 MESSAGE 2A (IF BUTTON A — INTEREST)
-<body: acknowledge interest; one verified Searce outcome sentence>
+Acknowledge interest; one verified Searce outcome as inline anchor on the client name.
 
 BUTTON A: <e.g. "See a demo">
 BUTTON B: <e.g. "Send details">
 
 ---
 MESSAGE 2B (IF BUTTON B — POLITE EXIT)
-<body: one gracious line; leave door open>
+One gracious line; leave door open.
 
 ---
 MESSAGE 3 (IF DEEP INTEREST FROM 2A)
-<body: specific offer — assessment / workshop / 1:1; 2 sentences>
+Specific offer — assessment / workshop / 1:1; 2 sentences.
 
 BUTTON A: <e.g. "Book 15 min">
 BUTTON B: <e.g. "Email me">
 
-OPTIONAL LINE:
-<If using Lead Gen Form, note field labels only — do not invent form URLs>
+OPTIONAL LEAD GEN FORM LINE:
+If using a Lead Gen Form, list field labels only — never invent form URLs.
 
-VERIFIED SEARCE RESOURCES:
-- <bullets with real URLs only>
+---
+STRATEGIST NOTE:
+Two to three sentences on the angle of the flow + the specific signal that drove it.
 
 RULES:
-- Entire flow under ~350 words total.
-- Buttons must be ultra-short; conversational tone; no corporate jargon walls.`;
+- Whole flow under ~280 words.
+- Buttons must be ultra-short; conversational tone; no corporate jargon walls.
+- Inline anchors only on verified Searce client names. No external-source anchors. No trailing source block.`;
 }

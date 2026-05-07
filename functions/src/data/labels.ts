@@ -1,107 +1,62 @@
-export const INDUSTRY_LABELS: Record<string, string> = {
-	TTL: "Travel, Transportation & Logistics",
-	TSS: "Technology, Software & Services",
-	MIC: "Manufacturing, Industrial & Construction",
-	HLS: "Healthcare & Life Sciences",
+/**
+ * Server-side label maps. Mirrors lib/constants.ts but compiled into the
+ * Cloud Functions deploy bundle.
+ *
+ * Industry codes + display labels follow the Mapped Pain Points workbook
+ * (Sheet 1). Anything below the "Other industries" divider is an extra not
+ * present in the workbook — kept so legacy session payloads still resolve.
+ *
+ * CATEGORY_LABELS / SUB_CATEGORY_LABELS are derived from the generated
+ * sheet data (Sheets 2 & 3) and re-exported here so prompt builders only
+ * need this single import.
+ */
+
+import { SHEET_PAIN_POINTS } from "./sheet-pain-points.js";
+
+// ─── Sheet 1 (workbook) ──────────────────────────────────────────────────────
+
+const SHEET_INDUSTRY_LABELS: Record<string, string> = {
 	FSI: "Financial Services & Insurance",
-	RCE: "Retail, CPG, E-commerce",
-	PSE: "Public Sector & Education",
-	NEU: "Natural Resources, Energy & Utilities",
+	HLS: "Healthcare & Life Sciences",
+	TTL: "Travel, Transportation & Logistics",
+	RCE: "Retail, CPG & E-commerce",
 	TMEG: "Telecommunications, Media, Entertainment & Gaming",
-	MISC: "Others",
+	MCM: "Manufacturing, Construction & Mining",
+	TSS: "Technology, Services & Startups",
+	EUP: "Energy, Utilities & Power",
+	PSE: "Public Sector & Education",
 };
 
-export const FUNCTION_LABELS: Record<string, string> = {
-	cxo: "CXO / Executive",
-	consulting: "Consulting",
-	data: "Data",
-	engineering: "Engineering",
-	entrepreneurship: "Entrepreneurship",
-	sales: "Sales",
-	marketing: "Marketing",
-	it: "Information Technology",
-	finance: "Finance",
-	operations: "Operations",
-	hr: "Human Resources",
-	legal: "Legal",
-	"media-comms": "Media & Communication",
-	"military-protective": "Military & Protective Services",
-	"product-management": "Product Management",
-	"program-project-mgmt": "Program & Project Management",
-	purchasing: "Purchasing",
-	"quality-assurance": "Quality Assurance",
-	research: "Research",
-	"customer-success": "Customer Success",
+// ─── Other industries (kept for legacy / outside the workbook) ──────────────
+
+const EXTRA_INDUSTRY_LABELS: Record<string, string> = {
+	MISC: "Other Industries",
 };
 
-export const SUB_FUNCTION_LABELS: Record<string, string> = {
-	ceo: "CEO / Managing Director",
-	cto: "CTO / VP Engineering",
-	cio: "CIO / Chief Digital Officer",
-	cfo: "CFO / Finance Director",
-	cdo: "Chief Data Officer",
-	"strategy-consulting": "Strategy Consulting",
-	"tech-consulting": "Technology Consulting",
-	"management-consulting": "Management Consulting",
-	"data-engineering": "Data Engineering",
-	"data-science": "Data Science",
-	"data-analytics": "Data Analytics",
-	"data-governance": "Data Governance",
-	"cloud-ops": "Cloud Operations",
-	"app-dev": "Application Development",
-	infrastructure: "Infrastructure",
-	devops: "DevOps / SRE",
-	"platform-eng": "Platform Engineering",
-	founder: "Founder / Co-Founder",
-	"startup-ops": "Startup Operations",
-	"enterprise-sales": "Enterprise Sales",
-	"inside-sales": "Inside Sales",
-	"sales-ops": "Sales Operations",
-	"account-management": "Account Management",
-	"demand-gen": "Demand Generation",
-	"product-marketing": "Product Marketing",
-	"brand-marketing": "Brand & Communications",
-	growth: "Growth Marketing",
-	"cyber-security": "Cyber Security",
-	"it-infrastructure": "IT Infrastructure",
-	"it-governance": "IT Governance",
-	"enterprise-architecture": "Enterprise Architecture",
-	"fp-and-a": "FP&A",
-	accounting: "Accounting",
-	treasury: "Treasury",
-	finops: "FinOps",
-	compliance: "Compliance & Regulatory",
-	contracts: "Contracts & Procurement",
-	"ip-law": "IP & Technology Law",
-	"content-strategy": "Content Strategy",
-	pr: "Public Relations",
-	"corporate-comms": "Corporate Communications",
-	"security-ops": "Security Operations",
-	"risk-management": "Risk Management",
-	"supply-chain": "Supply Chain",
-	logistics: "Logistics",
-	procurement: "Procurement",
-	"business-ops": "Business Operations",
-	"product-strategy": "Product Strategy",
-	"product-owner": "Product Owner",
-	"technical-pm": "Technical Product Manager",
-	"program-mgmt": "Program Management",
-	"project-mgmt": "Project Management",
-	pmo: "PMO",
-	"strategic-sourcing": "Strategic Sourcing",
-	"vendor-mgmt": "Vendor Management",
-	"qa-testing": "QA & Testing",
-	"process-quality": "Process Quality",
-	"r-and-d": "R&D",
-	"market-research": "Market Research",
-	innovation: "Innovation",
-	"talent-acquisition": "Talent Acquisition",
-	"people-ops": "People Operations",
-	"learning-dev": "Learning & Development",
-	onboarding: "Customer Onboarding",
-	support: "Customer Support",
-	"success-management": "Success Management",
+export const INDUSTRY_LABELS: Record<string, string> = {
+	...SHEET_INDUSTRY_LABELS,
+	...EXTRA_INDUSTRY_LABELS,
 };
+
+// ─── Categories & Sub-categories (Sheets 2 & 3) ─────────────────────────────
+
+export const CATEGORY_LABELS: Record<string, string> = (() => {
+	const out: Record<string, string> = {};
+	for (const row of SHEET_PAIN_POINTS) {
+		out[row.category] = row.categoryLabel;
+	}
+	return out;
+})();
+
+export const SUB_CATEGORY_LABELS: Record<string, string> = (() => {
+	const out: Record<string, string> = {};
+	for (const row of SHEET_PAIN_POINTS) {
+		out[row.subCategory] = row.subCategoryLabel;
+	}
+	return out;
+})();
+
+// ─── Regions ────────────────────────────────────────────────────────────────
 
 export const REGION_LABELS: Record<string, string> = {
 	AMER: "Americas",

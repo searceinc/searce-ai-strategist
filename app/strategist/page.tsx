@@ -5,10 +5,10 @@ import { ConfigPanel, ResearchPanel, OutputEditor } from "@/components/strategis
 import { useStrategistStore } from "@/lib/store/useStrategistStore";
 
 export default function StrategistPage() {
-	const { activeTab, setActiveTab, generatedContent } = useStrategistStore();
+	const { activeTab, setActiveTab } = useStrategistStore();
 
 	return (
-		<div className="mx-auto max-w-7xl space-y-6">
+		<div className="mx-auto max-w-[1400px] space-y-6">
 			<div>
 				<h1 className="text-2xl font-bold tracking-tight">Content Generator</h1>
 				<p className="text-sm text-muted-foreground">
@@ -17,20 +17,26 @@ export default function StrategistPage() {
 				</p>
 			</div>
 
-			{/* Desktop: config column fixed height; output + research stack can grow taller (page scrolls) */}
-			<div className="hidden lg:grid lg:grid-cols-[380px_1fr] lg:items-start lg:gap-6">
-				<div className="h-[calc(100vh-12rem)] min-h-0">
-					<ConfigPanel />
-				</div>
-				<div className="flex min-w-0 flex-col gap-8">
-					{generatedContent ? (
-						<>
-							<OutputEditor />
-							<ResearchPanel />
-						</>
-					) : (
+			{/*
+			 * Desktop layout (lg+):
+			 *   ┌──────────┬──────────────────────────────────────────────────┐
+			 *   │  Config  │  Generated Content                               │
+			 *   └──────────┴──────────────────────────────────────────────────┘
+			 *   ┌──────────────────────────────────────────────────────────────┐
+			 *   │  Intelligence Feed (full width below the two top blocks)    │
+			 *   └──────────────────────────────────────────────────────────────┘
+			 */}
+			<div className="hidden lg:flex lg:flex-col lg:gap-6">
+				<div className="grid grid-cols-[380px_1fr] gap-6 h-[calc(100vh-12rem)]">
+					<div className="min-h-0 min-w-0">
+						<ConfigPanel />
+					</div>
+					<div className="min-h-0 min-w-0">
 						<OutputEditor />
-					)}
+					</div>
+				</div>
+				<div className="min-w-0">
+					<ResearchPanel />
 				</div>
 			</div>
 

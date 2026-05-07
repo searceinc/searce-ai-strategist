@@ -1,5 +1,5 @@
 import { tavilySearch } from "../tavily/client.js";
-import { INDUSTRY_LABELS, FUNCTION_LABELS } from "../data/labels.js";
+import { resolveTaxonomyLabels, getSheetPainPoints } from "../data/pain-points.js";
 import type {
 	GenerationInput,
 	MetricItem,
@@ -10,35 +10,43 @@ import type {
 } from "../types.js";
 
 /**
- * Tavily-powered live research: 4 parallel searches.
+ * Tavily-powered live research. Four parallel searches:
  *
- * 1. Company news       — topic:"news", advanced, 5 results, last 30 days
- * 2. Industry trends     — topic:"general", advanced, 5 results, last month
- * 3. Pain points         — topic:"general", advanced, 5 results
- * 4. Searce case studies — scoped to searce.com, basic, 4 results
+ * 1. Company news        — topic:"news",  advanced, 5 results, last 30 days
+ * 2. Industry+sub-industry trends + ROI — topic:"general", advanced, last month
+ * 3. Sub-category pain points (uses the workbook's converged pain point bucket
+ *    as the search seed when available) — topic:"general", advanced, last year
+ * 4. Searce case-study lookup scoped to searce.com — basic, 4 results
  *
- * Query writing follows Tavily best practices:
- * - Under 400 chars, focused on ONE concept per search
- * - Natural-language phrasing (not keyword stuffing)
- * - Use `topic`, `time_range`, `days` for recency — not year in query text
- * - Use `include_domains` / `exclude_domains` for source control
+ * Replaces the previous persona-function-driven query construction. The
+ * sub-category + converged-pain-point seed produces dramatically more
+ * relevant results than "Marketing Director cloud trends".
  */
 export async function runResearch(
 	input: GenerationInput,
 	tavilyKey: string,
 ): Promise<ResearchSnapshot> {
-	const industryName =
-		INDUSTRY_LABELS[input.targetPersonaIndustry] ?? input.targetPersonaIndustry;
-	const functionName =
-		FUNCTION_LABELS[input.targetPersonaFunction] ?? input.targetPersonaFunction;
+	const labels = resolveTaxonomyLabels(
+		input.targetPersonaIndustry,
+		input.targetPersonaCategory,
+		input.targetPersonaSubCategory,
+	);
+	const sheet = getSheetPainPoints(
+		input.targetPersonaIndustry,
+		input.targetPersonaCategory,
+		input.targetPersonaSubCategory,
+	);
+
+	const subIndustryLabel = [labels.subCategory, labels.category].filter(Boolean).join(", ");
+	const taxonomyPhrase = subIndustryLabel
+		? `${subIndustryLabel} (${labels.industry})`
+		: labels.industry;
+	const convergedSeed = sheet.converged[0] ?? "technology adoption";
+	const detailedSeed = sheet.detailed[0] ?? "";
 
 	const searchPromises: Promise<Awaited<ReturnType<typeof tavilySearch>> | null>[] = [];
 
 	// ── Search 1: Company news ──
-	// Uses topic:"news" so Tavily returns actual press/news articles
-	// with published_date metadata. `days: 30` ensures recency.
-	// Do NOT put includeDomains: [targetDomain] — that limits results
-	// to the company's OWN site. We want third-party news ABOUT them.
 	if (input.targetCompany) {
 		searchPromises.push(
 			tavilySearch({
@@ -54,13 +62,10 @@ export async function runResearch(
 		searchPromises.push(Promise.resolve(null));
 	}
 
-	// ── Search 2: Industry trends & metrics ──
-	// Natural-language query focused on one concept: industry transformation stats.
-	// No analyst firm names — let Tavily find the best sources organically.
-	// time_range:"month" gives recent data without hardcoding a year.
+	// ── Search 2: Industry trends + ROI metrics ──
 	searchPromises.push(
 		tavilySearch({
-			query: `${industryName} ${functionName} cloud and AI adoption statistics trends and ROI metrics`,
+			query: `${taxonomyPhrase} cloud and AI adoption statistics, trends, and ROI metrics`,
 			apiKey: tavilyKey,
 			searchDepth: "advanced",
 			maxResults: 5,
@@ -69,12 +74,13 @@ export async function runResearch(
 		}).catch(() => null),
 	);
 
-	// ── Search 3: Pain points & challenges ──
-	// Focused on the ACTUAL persona function — not hardcoded "CTO CIO".
-	// A Marketing Director's pain points differ from a `CTO's.
+	// ── Search 3: Sub-category pain points (workbook-grounded) ──
+	const painQuery = detailedSeed
+		? `${taxonomyPhrase} ${convergedSeed} — "${detailedSeed.slice(0, 90)}"`
+		: `${taxonomyPhrase} ${convergedSeed} biggest technology challenges`;
 	searchPromises.push(
 		tavilySearch({
-			query: `${industryName} ${functionName} biggest technology challenges and pain points`,
+			query: painQuery,
 			apiKey: tavilyKey,
 			searchDepth: "advanced",
 			maxResults: 5,
@@ -84,10 +90,9 @@ export async function runResearch(
 	);
 
 	// ── Search 4: Searce case studies ──
-	// Scoped to searce.com only. Finds relevant proof points for this industry.
 	searchPromises.push(
 		tavilySearch({
-			query: `${industryName} cloud modernization case study`,
+			query: `${taxonomyPhrase} cloud modernization case study`,
 			apiKey: tavilyKey,
 			searchDepth: "basic",
 			maxResults: 4,
