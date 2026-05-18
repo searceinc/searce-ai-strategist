@@ -31,6 +31,7 @@ const generationInputObjectSchema = z
 			.optional()
 			.default(5),
 		linkedinInmailVariation: z.enum(["1", "2"]).optional().default("1"),
+		intelligenceFeedFocus: z.string().optional().default(""),
 
 		// Tolerated legacy fields. Discarded after parse.
 		targetPersonaFunction: z.string().optional(),

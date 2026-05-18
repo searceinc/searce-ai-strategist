@@ -67,6 +67,11 @@ export interface GenerationInput {
 	emailSequenceLength: EmailSequenceLength;
 	/** Used when selectedFormat is linkedin_inmail. */
 	linkedinInmailVariation: LinkedinInmailVariation;
+	/**
+	 * Ephemeral: centers generation on a chosen Intelligence Feed signal.
+	 * Stripped before persisting sessions.
+	 */
+	intelligenceFeedFocus: string;
 }
 
 // ─── Tavily ─────────────────────────────────────────────────────────────────
@@ -91,8 +96,16 @@ export interface ResearchSnapshot {
 	newsWithUrls: { title: string; url: string; content: string }[];
 	metricsWithUrls: { value: string; source: string; sourceUrl: string }[];
 	painPointsWithUrls: { text: string; source: string; sourceUrl: string }[];
+	/** Third-party URLs (not searce.com) for sidebar sourcing. */
+	externalSources: ExternalSourceItem[];
 	isLiveData: boolean;
 	timestamp: string;
+}
+
+export interface ExternalSourceItem {
+	title: string;
+	url: string;
+	kind: "news" | "metric" | "pain" | "reference";
 }
 
 /** Firestore / older sessions may omit nested arrays; keeps UI from crashing on `.length`. */
@@ -110,6 +123,7 @@ export function normalizeResearchSnapshot(
 		newsWithUrls: r.newsWithUrls ?? [],
 		metricsWithUrls: r.metricsWithUrls ?? [],
 		painPointsWithUrls: r.painPointsWithUrls ?? [],
+		externalSources: r.externalSources ?? [],
 		isLiveData: r.isLiveData ?? false,
 		timestamp: r.timestamp ?? "",
 	};

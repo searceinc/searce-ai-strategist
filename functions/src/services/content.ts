@@ -153,6 +153,10 @@ export async function orchestrateGeneration(
 		geminiKey,
 	});
 
+	if (!generatedContent?.trim()) {
+		throw new Error("Generation produced empty content. Retry or check API configuration.");
+	}
+
 	return {
 		research,
 		caseStudyMatches: caseStudies,
@@ -197,11 +201,23 @@ async function generateForFormat({
 				prompt: userPrompt,
 				systemInstruction: systemPrompt,
 				temperature: 0.35,
-				maxOutputTokens: 2048,
+				maxOutputTokens: 4096,
 				responseJsonSchema: SINGLE_EMAIL_SCHEMA,
 				validate: isSingleEmailResponse,
 			});
-			return assembleSingleEmail(resp, input.selectedFormat);
+			const assembled = assembleSingleEmail(resp, input.selectedFormat);
+			if (!singleEmailAssembledHasSubstance(assembled)) {
+				console.warn(
+					"Structured email body too thin after assembly; falling back to text mode.",
+				);
+				return textModeWithRetry({
+					input,
+					systemPrompt,
+					userPrompt,
+					geminiKey,
+				});
+			}
+			return assembled;
 		} catch (err) {
 			console.warn(
 				"Structured generation failed for single email; falling back to text mode.",
@@ -223,7 +239,7 @@ async function generateForFormat({
 				prompt: userPrompt,
 				systemInstruction: systemPrompt,
 				temperature: 0.35,
-				maxOutputTokens: 4096,
+				maxOutputTokens: 6144,
 				responseJsonSchema: SEQUENCE_SCHEMA,
 				validate: isSequenceResponse,
 			});
@@ -272,23 +288,25 @@ PREVIEW C: <preview>
 ===VERSION:LONG===
 Hi [FirstName],
 
-<paragraph 1>
+<micro-paragraph 1 — 1–2 sentences>
 
-<paragraph 2>
+<micro-paragraph 2 — 1–2 sentences>
 
-<optional paragraph 3 — bullets allowed using "•">
+<micro-paragraph 3 — optional bullets using "•" on separate lines in ONE block>
 
-<paragraph 3 or 4: peer-style low-friction ask>
+<more micro-paragraphs as needed — aim 5–9 short blocks total, each 1–3 lines>
+
+<final micro-paragraph: peer-style low-friction ask>
 
 [Your Name] | Searce
 ===VERSION:SHORT===
 Hi [FirstName],
 
-<paragraph 1>
+<several short blocks, 4–7 total — 1–2 sentences each>
 
-<paragraph 2 with one Searce anchor>
+<one block with Searce Markdown anchor>
 
-<optional CTA>
+<light CTA block>
 
 [Your Name] | Searce
 
@@ -297,6 +315,7 @@ STRATEGIST NOTE:
 <2–3 sentences>
 
 Rules: only Searce-domain Markdown anchors in the body, no external links. No "Hi [FirstName]" inside body paragraphs (it's already on its own line). No "[Your Name] | Searce" inside body paragraphs.
+- LONG: many short paragraphs (5–9 blocks), ~180 words max (~130 InMail). SHORT: 4–7 blocks, ~128 words (~88 InMail). **Bold** 4–7 times in LONG and 3–5 in SHORT: pair stats with nouns, stress 2–4 word pain phrases, use **Label:** on comparison bullets when it helps — never bold glue words alone (before, after, when, the, we, …). Square-bracket CRM tokens ONLY: [FirstName], [LastName], [Company name], [Industry name] — use **only when tone warrants** (see system prompt); never pad; no other [bracket] fillers.
 `;
 
 async function textModeWithRetry({
@@ -312,7 +331,7 @@ async function textModeWithRetry({
 		prompt: textPrompt,
 		systemInstruction: systemPrompt,
 		temperature: 0.4,
-		maxOutputTokens: 2048,
+		maxOutputTokens: 4096,
 	});
 
 	const compliance = checkCompliance(generatedContent, input.selectedFormat);
@@ -324,7 +343,7 @@ async function textModeWithRetry({
 				prompt: `${textPrompt}\n\n## PREVIOUS DRAFT (FOR REFERENCE — DO NOT REPEAT IT)\n${generatedContent}\n${corrective}`,
 				systemInstruction: systemPrompt,
 				temperature: 0.25,
-				maxOutputTokens: 2048,
+				maxOutputTokens: 4096,
 			});
 			const recheck = checkCompliance(rewritten, input.selectedFormat);
 			if (recheck.reasons.length <= compliance.reasons.length) {
@@ -334,20 +353,73 @@ async function textModeWithRetry({
 			/* fall through with the original draft */
 		}
 	}
+	if (
+		SINGLE_EMAIL_FORMATS.has(input.selectedFormat) &&
+		!singleEmailAssembledHasSubstance(generatedContent)
+	) {
+		console.warn(
+			"Text-mode email still looks thin after compliance pass; returning best effort.",
+		);
+	}
 	return generatedContent;
 }
 
 // ─── Type guards ───────────────────────────────────────────────────────────
 
+function countWordsLoose(text: string): number {
+	const stripped = text
+		.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+		.replace(/[*_`#]/g, " ")
+		.trim();
+	if (!stripped) return 0;
+	return stripped.split(/\s+/).filter(Boolean).length;
+}
+
+function countWordsInParagraphArray(value: unknown): number {
+	if (!Array.isArray(value)) return 0;
+	return value.reduce((acc, p) => acc + (typeof p === "string" ? countWordsLoose(p) : 0), 0);
+}
+
+function singleEmailAssembledHasSubstance(assembled: string): boolean {
+	const longMatch = assembled.match(/===VERSION:LONG===\s*([\s\S]*?)(?:===VERSION:SHORT===)/i);
+	const shortMatch = assembled.match(
+		/===VERSION:SHORT===\s*([\s\S]*?)(?:\r?\n---\r?\n\s*STRATEGIST\s*NOTE|STRATEGIST\s*NOTE)/i,
+	);
+	const longWords = longMatch?.[1] ? countWordsLoose(longMatch[1]) : 0;
+	const shortWords = shortMatch?.[1] ? countWordsLoose(shortMatch[1]) : 0;
+	return longWords >= 28 && shortWords >= 18;
+}
+
 function isSingleEmailResponse(value: unknown): value is SingleEmailResponse {
 	if (!value || typeof value !== "object") return false;
 	const v = value as Record<string, unknown>;
-	return (
-		Array.isArray(v.subjects) &&
-		Array.isArray(v.longParagraphs) &&
-		Array.isArray(v.shortParagraphs) &&
-		typeof v.strategistNote === "string"
-	);
+	if (
+		!Array.isArray(v.subjects) ||
+		!Array.isArray(v.longParagraphs) ||
+		!Array.isArray(v.shortParagraphs) ||
+		typeof v.strategistNote !== "string"
+	) {
+		return false;
+	}
+	if (v.subjects.length < 3) return false;
+	let subjectsOk = 0;
+	for (const s of v.subjects) {
+		if (!s || typeof s !== "object") continue;
+		const o = s as Record<string, unknown>;
+		const subj = typeof o.subject === "string" ? o.subject.trim() : "";
+		if (subj.length >= 4) subjectsOk++;
+	}
+	if (subjectsOk < 3) return false;
+
+	if (v.longParagraphs.length < 5 || v.shortParagraphs.length < 4) return false;
+
+	const longWords = countWordsInParagraphArray(v.longParagraphs);
+	const shortWords = countWordsInParagraphArray(v.shortParagraphs);
+	if (longWords < 28 || shortWords < 20) return false;
+
+	if (v.strategistNote.trim().length < 20) return false;
+
+	return true;
 }
 
 function isSequenceResponse(value: unknown): value is SequenceResponse {

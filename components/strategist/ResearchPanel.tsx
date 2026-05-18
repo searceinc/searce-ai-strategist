@@ -9,10 +9,11 @@ import {
 	CheckCircle2,
 	Zap,
 	Link2,
-	LayoutGrid,
+	MousePointerClick,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useStrategistStore } from "@/lib/store/useStrategistStore";
@@ -20,6 +21,8 @@ import { confidenceLabel } from "@/lib/constants";
 import { strategistPanelCardClass } from "@/lib/strategist-panel";
 import { VERIFIED_SEARCE_LINKS } from "./research-data";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { callGenerateContent, callRegenerateContent } from "@/lib/firebase/firestore";
 
 /** Tab body: tall minimum scroll area; grows with content if needed. */
 const feedScrollRegionClass = "min-h-[min(32rem,48dvh)] w-full overflow-y-auto overscroll-contain";
@@ -30,9 +33,12 @@ export default function ResearchPanel() {
 		caseStudyMatches: rawCaseStudies,
 		fallbackPath,
 		confidenceScore,
-		transparencyNote,
 		isGenerating,
 		input,
+		currentSessionId,
+		setGenerating,
+		setGenerationResult,
+		setGenerationError,
 	} = useStrategistStore();
 	const caseStudyMatches = rawCaseStudies ?? [];
 
@@ -44,15 +50,43 @@ export default function ResearchPanel() {
 		return <EmptyState />;
 	}
 
+	async function runFeedFocusedRewrite(signal: string) {
+		const trimmed = signal.trim();
+		if (!trimmed) return;
+		setGenerating(true);
+		try {
+			const payload = { ...input, intelligenceFeedFocus: trimmed };
+			const result = currentSessionId
+				? await callRegenerateContent(currentSessionId, payload)
+				: await callGenerateContent(payload);
+			if (result.featureNotAvailable) {
+				setGenerationError(result.noMatchMessage ?? "No matching case studies found.");
+				toast.error(
+					result.noMatchMessage ??
+						"No matching case studies. Enable Intelligent Fallback.",
+				);
+				return;
+			}
+			setGenerationResult({ ...result, sessionId: result.sessionId });
+			toast.success("Email refocused on that signal");
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : "Update failed";
+			setGenerationError(msg);
+			toast.error(msg);
+		}
+	}
+
 	const confLabel = confidenceLabel(confidenceScore);
 	const searceLinks = buildSearceLinks(input.targetPersonaIndustry);
 	const metricsWithUrls = research.metricsWithUrls ?? [];
 	const newsWithUrls = research.newsWithUrls ?? [];
 	const painPointsWithUrls = research.painPointsWithUrls ?? [];
+	const externalSources = research.externalSources ?? [];
 	const hasMetrics = metricsWithUrls.length > 0;
 	const hasNews = newsWithUrls.length > 0;
 	const hasPain = painPointsWithUrls.length > 0;
 	const hasProof = caseStudyMatches.length > 0 || searceLinks.length > 0;
+	const hasExternal = externalSources.length > 0;
 
 	return (
 		<Card
@@ -97,7 +131,7 @@ export default function ResearchPanel() {
 			</CardHeader>
 
 			<Tabs
-				defaultValue="overview"
+				defaultValue="metrics"
 				className="flex min-h-0 w-full flex-1 flex-col overflow-hidden"
 			>
 				<div className="shrink-0 border-b px-3 pt-1">
@@ -105,10 +139,6 @@ export default function ResearchPanel() {
 						variant="line"
 						className="h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0 pb-1.5"
 					>
-						<TabsTrigger value="overview" className="text-xs">
-							<LayoutGrid className="size-3.5" />
-							Overview
-						</TabsTrigger>
 						<TabsTrigger value="metrics" className="text-xs" disabled={!hasMetrics}>
 							Metrics
 							{hasMetrics && (
@@ -136,151 +166,18 @@ export default function ResearchPanel() {
 						<TabsTrigger value="proof" className="text-xs" disabled={!hasProof}>
 							Proof
 						</TabsTrigger>
+						<TabsTrigger value="links" className="text-xs" disabled={!hasExternal}>
+							External links
+							{hasExternal && (
+								<span className="ml-1 rounded-full bg-muted px-1.5 py-px text-[10px] tabular-nums">
+									{externalSources.length}
+								</span>
+							)}
+						</TabsTrigger>
 					</TabsList>
 				</div>
 
 				<div className={feedScrollRegionClass}>
-					<TabsContent value="overview" className="m-0 mt-0">
-						<CardContent className="space-y-4 p-4">
-							{transparencyNote && (
-								<div className="rounded-lg border border-yellow-300/50 bg-yellow-50/50 p-3 dark:border-yellow-700/50 dark:bg-yellow-950/30">
-									<p className="text-xs text-yellow-700 dark:text-yellow-300">
-										{transparencyNote}
-									</p>
-								</div>
-							)}
-
-							<div className="grid gap-4 md:grid-cols-2">
-								<div className="space-y-2 rounded-lg border bg-muted/20 p-3">
-									<div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-										<TrendingUp className="size-3.5 text-primary" />
-										Metrics snapshot
-									</div>
-									{hasMetrics ? (
-										<ul className="space-y-2 text-sm">
-											{metricsWithUrls.slice(0, 2).map((m, i) => (
-												<li key={i} className="leading-snug">
-													<a
-														href={m.sourceUrl}
-														target="_blank"
-														rel="noopener noreferrer"
-														className="text-foreground underline-offset-2 hover:underline"
-													>
-														{m.value.slice(0, 120)}
-														{m.value.length > 120 ? "…" : ""}
-													</a>
-													<span className="mt-0.5 block font-mono text-[10px] text-muted-foreground">
-														{m.source}
-													</span>
-												</li>
-											))}
-										</ul>
-									) : (
-										<p className="text-xs text-muted-foreground">
-											No live metrics yet.
-										</p>
-									)}
-								</div>
-
-								<div className="space-y-2 rounded-lg border bg-muted/20 p-3">
-									<div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-										<Newspaper className="size-3.5 text-primary" />
-										Latest signal
-									</div>
-									{hasNews ? (
-										<ul className="space-y-2">
-											{newsWithUrls.slice(0, 2).map((n, i) => (
-												<li key={i}>
-													<a
-														href={n.url}
-														target="_blank"
-														rel="noopener noreferrer"
-														className="text-sm font-medium leading-snug text-foreground underline-offset-2 hover:underline line-clamp-2"
-													>
-														{n.title}
-													</a>
-												</li>
-											))}
-										</ul>
-									) : (
-										<p className="text-xs text-muted-foreground">
-											No news hits.
-										</p>
-									)}
-								</div>
-							</div>
-
-							<div className="grid gap-4 md:grid-cols-2">
-								<div className="space-y-2 rounded-lg border bg-muted/20 p-3">
-									<div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-										<AlertTriangle className="size-3.5 text-primary" />
-										Pain themes
-									</div>
-									{hasPain ? (
-										<ul className="space-y-1.5 text-sm">
-											{painPointsWithUrls.slice(0, 2).map((p, i) => (
-												<li
-													key={i}
-													className="leading-snug text-muted-foreground"
-												>
-													{p.text}
-												</li>
-											))}
-										</ul>
-									) : (
-										<p className="text-xs text-muted-foreground">
-											No pain signals.
-										</p>
-									)}
-								</div>
-
-								<div className="space-y-2 rounded-lg border bg-muted/20 p-3">
-									<div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-										<CheckCircle2 className="size-3.5 text-primary" />
-										Proof at a glance
-									</div>
-									{hasProof ? (
-										<ul className="space-y-1.5 text-sm">
-											{caseStudyMatches.slice(0, 2).map((cs) => (
-												<li key={cs.id} className="truncate font-medium">
-													<a
-														href={cs.url}
-														target="_blank"
-														rel="noopener noreferrer"
-														className="hover:underline"
-													>
-														{cs.title}
-													</a>
-												</li>
-											))}
-											{caseStudyMatches.length === 0 &&
-												searceLinks.slice(0, 2).map((sl, i) => (
-													<li key={i} className="truncate font-medium">
-														<a
-															href={sl.url}
-															target="_blank"
-															rel="noopener noreferrer"
-															className="hover:underline"
-														>
-															{sl.title}
-														</a>
-													</li>
-												))}
-										</ul>
-									) : (
-										<p className="text-xs text-muted-foreground">
-											No matched stories.
-										</p>
-									)}
-								</div>
-							</div>
-
-							<p className="text-center text-[10px] text-muted-foreground">
-								Use the tabs above for full lists and links.
-							</p>
-						</CardContent>
-					</TabsContent>
-
 					<TabsContent value="metrics" className="m-0 mt-0">
 						<CardContent className="p-4">
 							<FeedSection
@@ -289,23 +186,36 @@ export default function ResearchPanel() {
 							>
 								<div className="space-y-2">
 									{metricsWithUrls.map((metric, i) => (
-										<a
+										<div
 											key={i}
-											href={metric.sourceUrl}
-											target="_blank"
-											rel="noopener noreferrer"
-											className="block rounded-lg border bg-background p-3 transition-all hover:bg-accent hover:shadow-sm"
+											className="rounded-lg border bg-background p-3 transition-all hover:bg-accent/40"
 										>
 											<p className="text-sm leading-relaxed text-foreground">
 												{metric.value}
 											</p>
-											<div className="mt-2 flex items-center justify-between">
-												<span className="max-w-[70%] truncate font-mono text-[10px] text-muted-foreground">
+											<div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+												<span className="max-w-[55%] truncate font-mono text-[10px] text-muted-foreground">
 													{metric.source}
 												</span>
-												<ExternalLink className="size-3 text-muted-foreground" />
+												<div className="flex flex-wrap gap-1.5">
+													<Button
+														variant="outline"
+														size="sm"
+														className="h-8 px-2"
+														asChild
+													>
+														<a
+															href={metric.sourceUrl}
+															target="_blank"
+															rel="noopener noreferrer"
+															className="gap-1"
+														>
+															<ExternalLink className="size-3.5" />
+														</a>
+													</Button>
+												</div>
 											</div>
-										</a>
+										</div>
 									))}
 								</div>
 							</FeedSection>
@@ -316,27 +226,41 @@ export default function ResearchPanel() {
 						<CardContent className="p-4">
 							<FeedSection icon={Newspaper} title="News pulse">
 								<div className="space-y-2">
-									{newsWithUrls.slice(0, 4).map((news, i) => (
-										<a
+									{newsWithUrls.map((news, i) => (
+										<div
 											key={i}
-											href={news.url}
-											target="_blank"
-											rel="noopener noreferrer"
-											className="flex items-start gap-2 rounded-lg border bg-background p-2.5 transition-all hover:bg-accent hover:shadow-sm"
+											className="flex flex-col gap-2 rounded-lg border bg-background p-3 transition-all hover:bg-accent/40"
 										>
-											<div className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-											<div className="min-w-0 flex-1">
-												<p className="text-sm font-medium leading-snug text-foreground line-clamp-2">
-													{news.title}
-												</p>
-												{news.content && (
-													<p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-														{news.content}
+											<div className="flex gap-2">
+												<div className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
+												<div className="min-w-0 flex-1">
+													<p className="text-sm font-medium leading-snug text-foreground">
+														{news.title}
 													</p>
-												)}
+													{news.content && (
+														<p className="mt-1 text-xs text-muted-foreground line-clamp-3">
+															{news.content}
+														</p>
+													)}
+												</div>
 											</div>
-											<ExternalLink className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
-										</a>
+											<div className="flex flex-wrap justify-end gap-1.5">
+												<Button
+													variant="outline"
+													size="sm"
+													className="h-8 px-2"
+													asChild
+												>
+													<a
+														href={news.url}
+														target="_blank"
+														rel="noopener noreferrer"
+													>
+														<ExternalLink className="size-3.5" />
+													</a>
+												</Button>
+											</div>
+										</div>
 									))}
 								</div>
 							</FeedSection>
@@ -347,24 +271,105 @@ export default function ResearchPanel() {
 						<CardContent className="p-4">
 							<FeedSection icon={AlertTriangle} title="Industry pain points">
 								<div className="space-y-2">
-									{painPointsWithUrls.slice(0, 6).map((point, i) => (
-										<a
+									{painPointsWithUrls.map((point, i) => (
+										<div
 											key={i}
-											href={point.sourceUrl}
-											target="_blank"
-											rel="noopener noreferrer"
-											className="block rounded-lg border bg-background p-2.5 transition-all hover:bg-accent hover:shadow-sm"
+											className="rounded-lg border bg-background p-3 transition-all hover:bg-accent/40"
 										>
 											<p className="text-sm text-foreground">{point.text}</p>
-											<div className="mt-1.5 flex items-center justify-between">
+											<div className="mt-2 flex flex-wrap items-center justify-between gap-2">
 												<span className="font-mono text-[10px] text-muted-foreground">
 													{point.source}
 												</span>
-												<ExternalLink className="size-3 text-muted-foreground" />
+												<div className="flex flex-wrap gap-1.5">
+													<Button
+														type="button"
+														variant="secondary"
+														size="sm"
+														className="h-8 gap-1 px-2 text-xs"
+														onClick={() =>
+															void runFeedFocusedRewrite(
+																`Pain point (from feed): ${point.text}`,
+															)
+														}
+													>
+														<MousePointerClick className="size-3.5" />
+														Refocus email
+													</Button>
+													<Button
+														variant="outline"
+														size="sm"
+														className="h-8 px-2"
+														asChild
+													>
+														<a
+															href={point.sourceUrl}
+															target="_blank"
+															rel="noopener noreferrer"
+														>
+															<ExternalLink className="size-3.5" />
+														</a>
+													</Button>
+												</div>
 											</div>
-										</a>
+										</div>
 									))}
 								</div>
+							</FeedSection>
+						</CardContent>
+					</TabsContent>
+
+					<TabsContent value="links" className="m-0 mt-0">
+						<CardContent className="p-4">
+							<FeedSection icon={Link2} title="External links / sources">
+								{hasExternal ? (
+									<div className="space-y-4">
+										{(["news", "metric", "pain", "reference"] as const).map(
+											(kind) => {
+												const group = externalSources.filter(
+													(e) => e.kind === kind,
+												);
+												if (group.length === 0) return null;
+												const label =
+													kind === "news"
+														? "News"
+														: kind === "metric"
+															? "Metrics"
+															: kind === "pain"
+																? "Pain research"
+																: "Other sources";
+												return (
+													<div key={kind}>
+														<p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+															{label}
+														</p>
+														<ul className="space-y-2">
+															{group.map((ex, i) => (
+																<li key={`${ex.url}-${i}`}>
+																	<a
+																		href={ex.url}
+																		target="_blank"
+																		rel="noopener noreferrer"
+																		className="flex items-start gap-2 rounded-lg border bg-background p-2.5 text-sm leading-snug transition-all hover:bg-accent hover:shadow-sm"
+																	>
+																		<ExternalLink className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+																		<span className="min-w-0 text-foreground">
+																			{ex.title}
+																		</span>
+																	</a>
+																</li>
+															))}
+														</ul>
+													</div>
+												);
+											},
+										)}
+									</div>
+								) : (
+									<p className="text-xs text-muted-foreground">
+										No third-party links collected for this run.
+									</p>
+								)}
 							</FeedSection>
 						</CardContent>
 					</TabsContent>

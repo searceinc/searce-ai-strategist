@@ -68,7 +68,7 @@ export const useStrategistStore = create<StrategistState>((set) => ({
 
 	setGenerating: (v) => set({ isGenerating: v, generationError: null }),
 	setGenerationResult: (result) =>
-		set({
+		set((s) => ({
 			currentSessionId: result.sessionId,
 			research: normalizeResearchSnapshot(result.research),
 			caseStudyMatches: result.caseStudyMatches ?? [],
@@ -79,7 +79,8 @@ export const useStrategistStore = create<StrategistState>((set) => ({
 			transparencyNote: result.transparencyNote,
 			isGenerating: false,
 			activeTab: "output",
-		}),
+			input: { ...s.input, intelligenceFeedFocus: "" },
+		})),
 	setEditedContent: (content) => set({ editedContent: content }),
 	setGenerationError: (error) => set({ generationError: error, isGenerating: false }),
 	clearGeneration: () =>

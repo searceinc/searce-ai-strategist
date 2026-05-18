@@ -1,6 +1,7 @@
 import { tavilySearch } from "../tavily/client.js";
 import { resolveTaxonomyLabels, getSheetPainPoints } from "../data/pain-points.js";
 import type {
+	ExternalSourceItem,
 	GenerationInput,
 	MetricItem,
 	NewsItem,
@@ -12,15 +13,13 @@ import type {
 /**
  * Tavily-powered live research. Four parallel searches:
  *
- * 1. Company news        — topic:"news",  advanced, 5 results, last 30 days
- * 2. Industry+sub-industry trends + ROI — topic:"general", advanced, last month
- * 3. Sub-category pain points (uses the workbook's converged pain point bucket
- *    as the search seed when available) — topic:"general", advanced, last year
- * 4. Searce case-study lookup scoped to searce.com — basic, 4 results
+ * 1. News pulse        — named company OR industry/taxonomy news (topic:"news")
+ * 2. Industry trends + ROI — topic:"general", last month
+ * 3. Sub-category pain points (workbook-grounded seed) — topic:"general", last year
+ * 4. Searce case-study lookup scoped to searce.com
  *
- * Replaces the previous persona-function-driven query construction. The
- * sub-category + converged-pain-point seed produces dramatically more
- * relevant results than "Marketing Director cloud trends".
+ * `externalSources` lists non-Searce URLs for the Intelligence Feed: categorized
+ * news/metrics/pain rows first, then any other Tavily hits in `allSources` as `reference`.
  */
 export async function runResearch(
 	input: GenerationInput,
@@ -46,11 +45,11 @@ export async function runResearch(
 
 	const searchPromises: Promise<Awaited<ReturnType<typeof tavilySearch>> | null>[] = [];
 
-	// ── Search 1: Company news ──
-	if (input.targetCompany) {
+	// ── Search 1: Company news (named account) OR industry news pulse (no company) ──
+	if (input.targetCompany?.trim()) {
 		searchPromises.push(
 			tavilySearch({
-				query: `"${input.targetCompany}" recent news technology cloud digital transformation`,
+				query: `"${input.targetCompany.trim()}" recent news technology cloud digital transformation`,
 				apiKey: tavilyKey,
 				searchDepth: "advanced",
 				maxResults: 5,
@@ -59,7 +58,16 @@ export async function runResearch(
 			}).catch(() => null),
 		);
 	} else {
-		searchPromises.push(Promise.resolve(null));
+		searchPromises.push(
+			tavilySearch({
+				query: `${taxonomyPhrase} sector news technology cloud AI digital transformation`,
+				apiKey: tavilyKey,
+				searchDepth: "advanced",
+				maxResults: 5,
+				topic: "news",
+				days: 45,
+			}).catch(() => null),
+		);
 	}
 
 	// ── Search 2: Industry trends + ROI metrics ──
@@ -100,23 +108,23 @@ export async function runResearch(
 		}).catch(() => null),
 	);
 
-	const [companyResults, trendResults, painPointResults, searceResults] =
+	const [newsResults, trendResults, painPointResults, searceResults] =
 		await Promise.all(searchPromises);
 
-	// ── Extract company news with URLs ──
+	// ── Extract news with URLs (company-specific OR industry pulse) ──
 	const newsWithUrls: NewsItem[] = [];
 	let companyContext = "";
 	const allSources: TavilyResult[] = [];
 	const seenUrls = new Set<string>();
 
-	if (companyResults?.results?.length) {
-		const newsItems = companyResults.results.slice(0, 4);
-		companyContext = companyResults.answer ?? newsItems[0]?.content?.substring(0, 300) ?? "";
+	if (newsResults?.results?.length) {
+		const newsItems = newsResults.results.slice(0, 5);
+		companyContext = newsResults.answer ?? newsItems[0]?.content?.substring(0, 320) ?? "";
 		for (const item of newsItems) {
 			newsWithUrls.push({
 				title: item.title,
 				url: item.url,
-				content: item.content?.substring(0, 150) ?? "",
+				content: item.content?.substring(0, 180) ?? "",
 			});
 			if (!seenUrls.has(item.url)) {
 				seenUrls.add(item.url);
@@ -163,6 +171,22 @@ export async function runResearch(
 				seenUrls.add(item.url);
 				allSources.push(item);
 			}
+		}
+	}
+
+	// ── Additional Tavily hits (for Intelligence Feed links beyond the primary slices) ──
+	if (trendResults?.results?.length) {
+		for (const item of trendResults.results.slice(4, 10)) {
+			if (!item.url || seenUrls.has(item.url)) continue;
+			seenUrls.add(item.url);
+			allSources.push(item);
+		}
+	}
+	if (painPointResults?.results?.length) {
+		for (const item of painPointResults.results.slice(4, 10)) {
+			if (!item.url || seenUrls.has(item.url)) continue;
+			seenUrls.add(item.url);
+			allSources.push(item);
 		}
 	}
 
@@ -217,19 +241,85 @@ export async function runResearch(
 
 	allSources.sort((a, b) => b.score - a.score);
 
+	const externalSources = buildExternalSources(
+		newsWithUrls,
+		metricsWithUrls,
+		painPointsWithUrls,
+		allSources,
+	);
+
 	return {
 		companyContext,
 		industryTrends: industryTrends.slice(0, 6),
 		painPoints: painPoints.slice(0, 6),
 		metrics: metrics.slice(0, 6),
 		sources: allSources.slice(0, 12),
-		tavilyAnswer: companyResults?.answer ?? trendResults?.answer,
+		tavilyAnswer: newsResults?.answer ?? trendResults?.answer,
 		newsWithUrls,
 		metricsWithUrls,
 		painPointsWithUrls,
+		externalSources,
 		isLiveData: true,
 		timestamp: new Date().toISOString(),
 	};
+}
+
+function isNonSearceHttpUrl(url: string): boolean {
+	const u = (url ?? "").trim();
+	if (!/^https?:\/\//i.test(u)) return false;
+	try {
+		const host = new URL(u).hostname.toLowerCase();
+		return host !== "searce.com" && !host.endsWith(".searce.com");
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Deduplicated third-party links for the Intelligence Feed only.
+ * Email bodies must not hyperlink these; prose + Searce anchors only.
+ */
+function buildExternalSources(
+	news: NewsItem[],
+	metrics: MetricItem[],
+	pains: PainPointItem[],
+	allRankedSources: TavilyResult[],
+	maxItems = 40,
+): ExternalSourceItem[] {
+	const out: ExternalSourceItem[] = [];
+	const seen = new Set<string>();
+
+	const push = (url: string, title: string, kind: ExternalSourceItem["kind"]) => {
+		const u = (url ?? "").trim();
+		if (!u || seen.has(u) || !isNonSearceHttpUrl(u)) return;
+		seen.add(u);
+		const t = (title ?? "").replace(/\s+/g, " ").trim() || u;
+		out.push({ url: u, title: t.slice(0, 220), kind });
+	};
+
+	for (const n of news) {
+		push(n.url, n.title, "news");
+		if (out.length >= maxItems) return out;
+	}
+	for (const m of metrics) {
+		push(m.sourceUrl, m.value, "metric");
+		if (out.length >= maxItems) return out;
+	}
+	for (const p of pains) {
+		push(p.sourceUrl, p.text, "pain");
+		if (out.length >= maxItems) return out;
+	}
+
+	for (const item of allRankedSources) {
+		if (out.length >= maxItems) break;
+		const title =
+			item.title?.trim() ||
+			item.content?.substring(0, 140).replace(/\s+/g, " ").trim() ||
+			item.url;
+		push(item.url, title, "reference");
+	}
+
+	return out;
 }
 
 function extractHostname(url: string): string {

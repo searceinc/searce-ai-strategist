@@ -16,20 +16,20 @@ interface SingleEmailCaps {
 }
 
 function singleEmailCaps(format: ContentFormat): SingleEmailCaps {
-	// LinkedIn InMail stays a bit shorter for the channel; everything else
-	// targets a 3-4 paragraph, 3-4 sentence body (~150 words).
+	// SHORT ≈ prior LONG depth; LONG is an expanded pass (caps enforced in assembler + compliance).
 	if (format === "linkedin_inmail") {
-		return { longWordMax: 110, shortWordMax: 55 };
+		return { longWordMax: 130, shortWordMax: 88 };
 	}
-	return { longWordMax: 160, shortWordMax: 85 };
+	return { longWordMax: 180, shortWordMax: 128 };
 }
 
-const SEQUENCE_LONG_WORD_MAX = 150;
-const SEQUENCE_FINAL_WORD_MAX = 95;
-// Per-paragraph sentence cap. A "paragraph" that's actually a bullet block
-// is usually 2–3 short bullet lines; both fit comfortably under 4.
-const PER_PARAGRAPH_SENTENCE_CAP = 4;
-const MAX_PARAGRAPHS = 5;
+const SEQUENCE_LONG_WORD_MAX = 170;
+const SEQUENCE_FINAL_WORD_MAX = 102;
+/** Prose blocks: keep each visual paragraph to 1–2 sentences (rarely 3 if very short). */
+const PROSE_MAX_SENTENCES_PER_BLOCK = 2;
+/** Bullet blocks: cap lines per JSON block (bullets are one "paragraph" entry). */
+const BULLET_MAX_LINES_PER_BLOCK = 4;
+const MAX_PARAGRAPHS = 9;
 
 // ─── Public API ────────────────────────────────────────────────────────────
 
@@ -172,6 +172,7 @@ function sanitizeParagraph(input: string): string {
 	// [text](url) is unwrapped to plain text. Tavily metric quotes,
 	// LinkedIn posts, news sites, blog posts — all become prose.
 	p = stripNonSearceLinks(p);
+	p = stripBogusSquareBracketPlaceholders(p);
 
 	// Strip residual "WHY YOU:" / "AS A LEADER:" / structural-style label
 	// prefixes the model sometimes inserts at the start of a line.
@@ -207,6 +208,17 @@ function sanitizeParagraph(input: string): string {
 			.trim();
 	}
 	return p;
+}
+
+/**
+ * Remove fake "merge field" style brackets the model invents (not CRM tokens).
+ * Allowed rep tokens are enforced in prompts; this catches common leaks.
+ */
+function stripBogusSquareBracketPlaceholders(text: string): string {
+	return text
+		.replace(/\[(?:Multiple|Several|Various|Many)\s+clients?\]/gi, "organizations like theirs")
+		.replace(/\[(?:Your|Our)\s+organization\]/gi, "your organization")
+		.replace(/\[(?:The\s+)?client(?:\s+name)?\]/gi, "the client");
 }
 
 /**
@@ -279,22 +291,22 @@ function stripDecorators(s: string): string {
  * Enforce a per-paragraph sentence cap, then enforce a total word cap on
  * the body by trimming trailing sentences from the longest paragraph.
  *
- * A "paragraph" here can be either prose or a 2–3 line bullet block; both
- * are bounded by `PER_PARAGRAPH_SENTENCE_CAP`.
+ * A "paragraph" here is one JSON array entry: either short prose (sentence-capped)
+ * or a bullet block (line-capped).
  */
 function enforceParagraphLengths(paragraphs: string[], totalWordCap: number): string[] {
 	const out = paragraphs.slice(0, MAX_PARAGRAPHS).map((p) => {
-		// Bullet blocks: keep up to PER_PARAGRAPH_SENTENCE_CAP bullet lines.
 		if (isBulletBlock(p)) {
 			const bullets = p
 				.split(/\r?\n/)
 				.map((l) => l.trim())
 				.filter(Boolean)
-				.slice(0, PER_PARAGRAPH_SENTENCE_CAP);
+				.slice(0, BULLET_MAX_LINES_PER_BLOCK);
 			return bullets.join("\n");
 		}
 		const sentences = splitSentences(p);
-		return sentences.slice(0, PER_PARAGRAPH_SENTENCE_CAP).join(" ");
+		const cap = proseSentenceCapForBlock(sentences);
+		return sentences.slice(0, cap).join(" ");
 	});
 
 	let total = totalWords(out);
@@ -337,6 +349,15 @@ function longestParagraphIndex(paragraphs: string[]): number {
 		}
 	}
 	return bestIdx;
+}
+
+/**
+ * Allow a 3rd sentence only when all sentences are very short (mobile-friendly micro-lines).
+ */
+function proseSentenceCapForBlock(sentences: string[]): number {
+	if (sentences.length <= PROSE_MAX_SENTENCES_PER_BLOCK) return sentences.length;
+	const allShort = sentences.slice(0, 3).every((s) => countWords(s) <= 14);
+	return allShort ? Math.min(3, sentences.length) : PROSE_MAX_SENTENCES_PER_BLOCK;
 }
 
 function isBulletBlock(text: string): boolean {

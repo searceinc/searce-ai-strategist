@@ -73,7 +73,7 @@ export const generateContent = onCall(
 			}
 
 			const sessionId = await saveSession(request.auth.uid, {
-				input,
+				input: { ...input, intelligenceFeedFocus: "" },
 				research: result.research,
 				caseStudyMatches: result.caseStudyMatches,
 				fallbackPath: result.fallbackPath,

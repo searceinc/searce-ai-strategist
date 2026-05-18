@@ -9,8 +9,8 @@
  *
  * Field shapes:
  *   subjects:        3–4 items, each {letter, subject, preview}
- *   longParagraphs:  3–5 paragraph strings (target: 3–4 paragraphs)
- *   shortParagraphs: 2–4 paragraph strings (target: 2–3 paragraphs)
+ *   longParagraphs:  5–9 short strings (micro-paragraphs; one visual block each)
+ *   shortParagraphs: 4–7 short strings
  *   strategistNote:  separate string field
  *
  * Bullet lists are encouraged INSIDE a paragraph, written as Markdown lines
@@ -56,18 +56,18 @@ export const SINGLE_EMAIL_SCHEMA = {
 		longParagraphs: {
 			type: "array",
 			items: { type: "string" },
-			minItems: 3,
-			maxItems: 5,
+			minItems: 5,
+			maxItems: 9,
 			description:
-				"Aim for 3–4 paragraphs. Each paragraph is 3–4 short sentences (≤ 18 words each). Greeting and sign-off lines are added by the server — do NOT include them. Bullets are encouraged where they help: write 2–3 lines starting with '•' inside a paragraph (e.g. 'Legacy Process: …', 'With Searce: …', 'Result: …'). Total ≤ ~150 words across all paragraphs. Recommended structure: P1 = signal-driven hook (1–2 sentences). P2 = the specific pain narrative (3–4 sentences). P3 (optional) = a 2–3 bullet 'Searce Transformation' mini-block OR a verified Searce proof anchored as Markdown link [Client](url). P4 = peer-style low-friction ask (1–2 sentences).",
+				'Use 5–9 array entries. EACH entry is ONE micro-paragraph: at most 2 sentences (3 only if every sentence is very short). Prefer 1–2 sentences so each block is 1–3 lines on screen — use a NEW array item for each beat instead of stacking sentences in one string. One entry may be a 2–4 line bullet block using lines starting with \'•\'. Total ≤ ~180 words (≤ ~130 InMail). Use **bold** for scan-friendly emphasis (4–7 short spans): metric+noun phrases, 2–4 word pain hooks, proper nouns, and **Label:** prefixes on bullet lines where helpful — never bold glue words alone ("before", "after", "the", "we"). Spread bold across blocks. Exactly ONE Searce Markdown anchor [VerifiedClientName](searce url) using a real client from the list — never generic labels like [Multiple clients].',
 		},
 		shortParagraphs: {
 			type: "array",
 			items: { type: "string" },
-			minItems: 2,
-			maxItems: 4,
+			minItems: 4,
+			maxItems: 7,
 			description:
-				"Aim for 2–3 paragraphs, ≤ 80 words total. P1 = greeting+hook in one sentence (without writing 'Hi …', the server adds that). P2 = the pain + ONE verified Searce proof anchored as Markdown link [Client](url) (1–2 sentences). P3 (optional) = low-friction CTA (1 sentence).",
+				"Use 4–7 micro-paragraphs: same rule — one short idea per array entry (1–2 sentences each, rarely 3 if all very short). Split dense paragraphs into more entries. ≤ ~128 words (≤ ~88 InMail). **Bold** 3–5 times: metric+context phrases, pain hooks, proper nouns, optional **Label:** on bullet lines — not glue words alone. One Searce anchor. No generic bracket link labels.",
 		},
 		strategistNote: {
 			type: "string",
@@ -94,10 +94,10 @@ const sequenceEmailSchema = {
 		paragraphs: {
 			type: "array",
 			items: { type: "string" },
-			minItems: 3,
-			maxItems: 5,
+			minItems: 5,
+			maxItems: 9,
 			description:
-				"Aim for 3–4 paragraphs, 3–4 short sentences each. Greeting and sign-off added by the server. Bullets allowed inside a paragraph using '•'. Total ≤ ~140 words (closing email of a sequence may run ≤ 90). Recommended: P1 = persona-specific hook bake into prose. P2 = pain narrative. P3 (optional) = bullets OR a verified Searce proof anchored as Markdown link. P4 = peer-style low-friction ask.",
+				"5–9 micro-paragraphs per email: 1–2 sentences per entry (rarely 3 if all short); one '•' bullet block allowed as a single entry. Total ≤ ~170 words (closing ≤ ~102). **Bold** 4–7 spans: keywords, metric+context, bullet labels — never connector words alone. One Searce anchor per email.",
 		},
 	},
 	required: ["title", "subjects", "paragraphs"],

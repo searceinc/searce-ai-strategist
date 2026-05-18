@@ -94,5 +94,6 @@ export function migrateLegacyInput(raw: LegacyShape): GenerationInput {
 		nurtureTemplate: raw.nurtureTemplate ?? "1",
 		emailSequenceLength: raw.emailSequenceLength ?? 5,
 		linkedinInmailVariation: raw.linkedinInmailVariation ?? "1",
+		intelligenceFeedFocus: raw.intelligenceFeedFocus ?? "",
 	};
 }

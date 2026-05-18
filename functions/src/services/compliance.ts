@@ -36,13 +36,13 @@ interface LengthCaps {
 
 function lengthCapsFor(format: ContentFormat): LengthCaps {
 	if (format === "linkedin_inmail") {
-		return { longWordMax: 75, shortWordMax: 35 };
+		return { longWordMax: 130, shortWordMax: 88 };
 	}
-	return { longWordMax: 90, shortWordMax: 50 };
+	return { longWordMax: 180, shortWordMax: 128 };
 }
 
-const SEQUENCE_LONG_WORD_MAX = 90;
-const SEQUENCE_FINAL_WORD_MAX = 70;
+const SEQUENCE_LONG_WORD_MAX = 170;
+const SEQUENCE_FINAL_WORD_MAX = 102;
 
 export function checkCompliance(content: string, format: ContentFormat): ComplianceResult {
 	const reasons: string[] = [];
@@ -135,29 +135,29 @@ function checkSingleEmailBody({ body, label, wordMax, shortVariant, out }: Check
 	}
 
 	if (!shortVariant) {
-		if (bodyParas.length > 3) {
+		if (bodyParas.length > 10) {
 			out.push(
-				`${label} body has ${bodyParas.length} paragraphs; must be exactly 3 (1–2 / 2–3 / 1–2 sentences).`,
+				`${label} body has ${bodyParas.length} paragraphs; use at most 10 short blocks (each 1–3 lines).`,
 			);
-		} else if (bodyParas.length === 3) {
-			const [p1, p2, p3] = bodyParas as [string, string, string];
-			const s1 = countSentences(p1);
-			const s2 = countSentences(p2);
-			const s3 = countSentences(p3);
-			if (s1 > 2) out.push(`${label} paragraph 1 has ${s1} sentences; cap is 2.`);
-			if (s2 > 3) out.push(`${label} paragraph 2 has ${s2} sentences; cap is 3.`);
-			if (s3 > 2) out.push(`${label} paragraph 3 has ${s3} sentences; cap is 2.`);
+		} else if (bodyParas.length < 3) {
+			out.push(
+				`${label} body has too few paragraph breaks; split into more short paragraphs (aim for 5–9 blocks for LONG).`,
+			);
 		}
-	} else if (bodyParas.length > 3) {
-		out.push(`${label} body has ${bodyParas.length} paragraphs; SHORT must be 1–3 paragraphs.`);
+	} else if (bodyParas.length > 7) {
+		out.push(
+			`${label} body has ${bodyParas.length} paragraphs; SHORT should use at most 7 short blocks.`,
+		);
+	} else if (bodyParas.length < 2) {
+		out.push(`${label} SHORT body should use at least 2 short blocks.`);
 	}
 
 	for (const p of bodyParas) {
 		for (const sentence of splitSentences(p)) {
 			const w = countWords(sentence);
-			if (w > 22) {
+			if (w > 24) {
 				out.push(
-					`${label} contains a ${w}-word sentence (cap 18). Split: "${truncate(sentence, 70)}"`,
+					`${label} contains a ${w}-word sentence (cap 24). Split: "${truncate(sentence, 70)}"`,
 				);
 				break;
 			}
@@ -253,11 +253,10 @@ export function buildCorrectivePrompt(reasons: string[]): string {
 ## REWRITE REQUIRED — YOUR PREVIOUS OUTPUT FAILED THESE CHECKS
 ${list}
 
-Rewrite the deliverable NOW. Cut sentences until every check passes.
+Rewrite the deliverable NOW. Cut or split sentences until every check passes.
 Follow the LONG/SHORT contract EXACTLY:
-- LONG body: 3 paragraphs, sentence counts 1–2 / 2–3 / 1–2, total ≤ 80 words (≤ 65 for InMail).
-- SHORT body: total ≤ 45 words (≤ 30 for InMail).
-- Every sentence ≤ 18 words. Greeting and sign-off are SEPARATE single-line blocks, not part of the body word count.
-- Keep the SAME subject options + STRATEGIST NOTE + ===VERSION markers.
+- LONG body: many short paragraphs (aim 5–9 visual blocks), total within the word cap (≈180 words; ≈130 for InMail). Each block 1–3 lines. Greeting and sign-off are separate lines.
+- SHORT body: aim 4–7 short blocks within the SHORT cap (≈128 words; ≈88 for InMail).
+- Prefer sentences under 22 words. Keep ===VERSION markers and subject lines.
 Output ONLY the rewritten deliverable in the same structure as before.`;
 }

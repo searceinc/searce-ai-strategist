@@ -29,20 +29,16 @@ export function buildFormatInstructions(input: GenerationInput): string {
 }
 
 const COMMON_PARAGRAPH_GUIDANCE = `
-PARAGRAPH GUIDANCE FOR \`longParagraphs\` (single-email + sequence emails):
-- Aim for 3–4 paragraphs. Each paragraph 3–4 short sentences (each sentence ≤ 18 words). Total ≤ ~150 words.
-- Recommended rhythm:
-  • P1 (1–2 sentences): the hook. Reference one specific sub-industry signal. No "I hope this finds you well", no "I came across your profile", no preamble.
-  • P2 (3–4 sentences): the specific pain in this sub-category. Quantify the cost of the status quo where possible.
-  • P3 (optional): EITHER a 2–3-bullet "Searce Transformation" mini-block (write each bullet on its own line starting with "•", e.g. "• Legacy: 10 minutes per document.", "• With Searce: 30–45 seconds.", "• Result: 99% accuracy."), OR one verified Searce client outcome as a Markdown link [Client](url). Use ONLY practices from ALLOWED SEARCE PRACTICES.
-  • P4 (1–2 sentences): one peer-style low-friction ask. NEVER "book a demo" or "schedule a meeting".
-- ONE Searce anchor max across the whole body. Zero external-source hyperlinks.
+PARAGRAPH / WHITE-SPACE GUIDANCE FOR \`longParagraphs\` (single-email + sequence emails):
+- Output **5–9** strings in the array. **Each string is exactly ONE visual paragraph** the rep will see (separated by a blank line in the final email).
+- **Micro-paragraph rule:** each string should be **1–2 sentences** (add a 3rd **only** if all sentences are very short). On screen that is usually **1–3 lines** — never a dense 4-line block in a single string. When you have more to say, **add another array item** instead of chaining sentences in one entry.
+- Typical flow (flexible): hook micro-block → second micro-block (tension) → optional **•** bullet block as its own array entry (2–4 bullet lines) → proof micro-block with the single Searce Markdown anchor → CTA micro-block.
+- **LONG** total: ≤ ~180 words (≤ ~130 InMail). One Searce anchor in LONG. Zero third-party links.
+- **Bold:** use \`**…**\` **4–7** times in LONG and **3–5** in SHORT. Spread across different entries. Combine **numbers with the words that make them meaningful** (e.g. **60% improvement in delivery accuracy**), add **2–4 word tension phrases** (**unified visibility**, **manual reconciliation drag**), **proper nouns** when focal, and in **•** blocks use **short Label:** patterns (**Legacy process:** … **Result:** …). **Never** bold connector words alone (before, after, when, while, the, we, our, your, this, that, and, or, but, if, also, just, very, here, there). **Never** open a plain prose sentence with bold unless the first token is a **number**, a **proper noun**, or a deliberate **Label:** line.
 
 PARAGRAPH GUIDANCE FOR \`shortParagraphs\`:
-- 2–3 paragraphs total. Same beats, ruthlessly compressed. Total ≤ ~80 words.
-  • P1 (1 sentence): hook.
-  • P2 (1–2 sentences): the pain + ONE Searce proof anchored as Markdown link.
-  • P3 (optional, 1 sentence): low-friction CTA.
+- **4–7** strings, same micro-paragraph rule: **1–2 sentences per entry**; **split** a long thought into two entries rather than one long paragraph.
+- **SHORT** total: ≤ ~128 words (≤ ~88 InMail). One Searce anchor.
 
 DO NOT include "Hi [FirstName]," or "[Your Name] | Searce" inside any paragraph — the server adds those automatically.
 `;
@@ -124,7 +120,7 @@ OPTIONAL \`cadenceLine\` field: a single positive-string cadence suggestion like
 
 PER-EMAIL RULES:
 - Each email needs a DISTINCT hook AND distinct persona detail in P1 (bake the [Job Title] reality into the first sentence — never label it).
-- Per-email word total: ≤ ~150 words (the closing email may run ≤ ~95 words).
+- Per-email word total: ≤ ~170 words (the closing email may run ≤ ~102 words).
 - ONE Searce anchor per email max. No external-source anchors.
 - 3 subject options per email (the first email may use 4).
 `;
@@ -147,8 +143,9 @@ function linkedinInmailContent(variation: GenerationInput["linkedinInmailVariati
 ${COMMON_PARAGRAPH_GUIDANCE}
 
 LENGTH OVERRIDE FOR INMAIL:
-- \`longParagraphs\` total: ≤ ~110 words. 3 paragraphs is usually right.
-- \`shortParagraphs\` total: ≤ ~55 words.
+- Same micro-paragraph discipline: **5–8** \`longParagraphs\` entries preferred; **1–2 sentences** per entry.
+- \`longParagraphs\` total: ≤ ~130 words.
+- \`shortParagraphs\`: **4–6** entries, ≤ ~88 words total.
 - Native to LinkedIn. No "I came across your profile."
 
 ANGLE FOR THIS VARIATION:

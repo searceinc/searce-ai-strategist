@@ -23,6 +23,7 @@ export const DEFAULT_GENERATION_INPUT: GenerationInput = {
 	nurtureTemplate: "1",
 	emailSequenceLength: 5,
 	linkedinInmailVariation: "1",
+	intelligenceFeedFocus: "",
 };
 
 /** Merge Firestore / partial payloads into a valid GenerationInput. Applies legacy migration first. */

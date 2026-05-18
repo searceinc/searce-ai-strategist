@@ -65,6 +65,11 @@ export interface GenerationInput {
 	nurtureTemplate: NurtureTemplate;
 	emailSequenceLength: EmailSequenceLength;
 	linkedinInmailVariation: LinkedinInmailVariation;
+	/**
+	 * Ephemeral: when set, the model must center the email on this Intelligence Feed
+	 * signal. Cleared before persisting sessions; not shown in the config form.
+	 */
+	intelligenceFeedFocus: string;
 }
 
 // ─── Tavily ──────────────────────────────────────────────────────────────────
@@ -96,6 +101,8 @@ export interface ResearchSnapshot {
 	newsWithUrls: NewsItem[];
 	metricsWithUrls: MetricItem[];
 	painPointsWithUrls: PainPointItem[];
+	/** Third-party sources (news, stats, pain articles); Searce URLs excluded. */
+	externalSources: ExternalSourceItem[];
 	isLiveData: boolean;
 	timestamp: string;
 }
@@ -116,6 +123,14 @@ export interface PainPointItem {
 	text: string;
 	source: string;
 	sourceUrl: string;
+}
+
+/** Non-Searce URLs for the Intelligence Feed (email body must not link these). */
+export interface ExternalSourceItem {
+	title: string;
+	url: string;
+	/** Where this link came from in the research pipeline. */
+	kind: "news" | "metric" | "pain" | "reference";
 }
 
 // ─── Case Study (hardcoded, verified) ────────────────────────────────────────
