@@ -8,12 +8,30 @@
  * length limits on a free-form LLM.
  */
 
-import type { ContentFormat } from "../types.js";
+import type { ContentFormat, GenerationInput } from "../types.js";
 
 export interface ComplianceResult {
 	ok: boolean;
 	reasons: string[];
 }
+
+function resolveSequenceCount(
+	input: { selectedFormat: ContentFormat } & Partial<GenerationInput>,
+): number {
+	if (input.selectedFormat === "email_sequence") return input.emailSequenceLength ?? 5;
+	const raw = (input.sequenceCount ?? 1) as number;
+	if (raw < 1) return 1;
+	if (raw > 5) return 5;
+	return raw;
+}
+
+const SEQUENCE_CAPABLE_FORMATS_C: ReadonlySet<ContentFormat> = new Set([
+	"cold_email",
+	"sales_email",
+	"nurture_email",
+	"linkedin_inmail",
+	"email_sequence",
+]);
 
 const LONG_HEADER = /^\s*={3}\s*VERSION\s*:\s*LONG\s*={3}\s*$/im;
 const SHORT_HEADER = /^\s*={3}\s*VERSION\s*:\s*SHORT\s*={3}\s*$/im;
@@ -44,9 +62,53 @@ function lengthCapsFor(format: ContentFormat): LengthCaps {
 const SEQUENCE_LONG_WORD_MAX = 170;
 const SEQUENCE_FINAL_WORD_MAX = 102;
 
-export function checkCompliance(content: string, format: ContentFormat): ComplianceResult {
+export function checkCompliance(
+	content: string,
+	formatOrInput: ContentFormat | ({ selectedFormat: ContentFormat } & Partial<GenerationInput>),
+): ComplianceResult {
 	const reasons: string[] = [];
 	const text = (content ?? "").replace(/\r\n/g, "\n");
+
+	const input =
+		typeof formatOrInput === "string"
+			? ({ selectedFormat: formatOrInput } as {
+					selectedFormat: ContentFormat;
+				} & Partial<GenerationInput>)
+			: formatOrInput;
+	const format = input.selectedFormat;
+	const sequenceCount = resolveSequenceCount(input);
+
+	// Conversation Ad has its own multi-message structure; we don't enforce
+	// LONG/SHORT or per-email word caps on it. (Sequence variants are
+	// rendered by the parser via EMAIL N — Variant N headers.)
+	if (format === "linkedin_conversational_ad") {
+		return { ok: true, reasons: [] };
+	}
+
+	const isSequenceRun =
+		format === "email_sequence" ||
+		(SEQUENCE_CAPABLE_FORMATS_C.has(format) && sequenceCount > 1);
+
+	if (isSequenceRun) {
+		const emails = sliceSequenceEmails(text);
+		if (emails.length === 0) {
+			reasons.push(
+				`No "EMAIL N" sections found. Each touch must start with an "EMAIL N — title" header.`,
+			);
+		} else {
+			emails.forEach((body, idx) => {
+				const isFinal = idx === emails.length - 1 && emails.length >= 5;
+				const cap = isFinal ? SEQUENCE_FINAL_WORD_MAX : SEQUENCE_LONG_WORD_MAX;
+				checkSingleEmailBody({
+					body,
+					label: `EMAIL ${idx + 1}`,
+					wordMax: cap,
+					out: reasons,
+				});
+			});
+		}
+		return { ok: reasons.length === 0, reasons };
+	}
 
 	if (SINGLE_EMAIL_FORMATS.has(format)) {
 		const long = sliceBetween(text, LONG_HEADER, [SHORT_HEADER, STRATEGIST_HEADER]);
@@ -79,24 +141,6 @@ export function checkCompliance(content: string, format: ContentFormat): Complia
 			reasons.push(
 				`Missing ===VERSION:SHORT=== marker. Output must use that exact separator.`,
 			);
-		}
-	} else if (format === "email_sequence") {
-		const emails = sliceSequenceEmails(text);
-		if (emails.length === 0) {
-			reasons.push(
-				`No "EMAIL N" sections found. Each email must start with an "EMAIL N — title" header.`,
-			);
-		} else {
-			emails.forEach((body, idx) => {
-				const isFinal = idx === emails.length - 1 && emails.length >= 5;
-				const cap = isFinal ? SEQUENCE_FINAL_WORD_MAX : SEQUENCE_LONG_WORD_MAX;
-				checkSingleEmailBody({
-					body,
-					label: `EMAIL ${idx + 1}`,
-					wordMax: cap,
-					out: reasons,
-				});
-			});
 		}
 	}
 
@@ -231,10 +275,6 @@ function splitSentences(paragraph: string): string[] {
 		.split(/(?<=[.!?])\s+(?=[A-Z[(])/)
 		.map((s) => s.trim())
 		.filter(Boolean);
-}
-
-function countSentences(paragraph: string): number {
-	return splitSentences(paragraph).length;
 }
 
 function truncate(s: string, n: number): string {

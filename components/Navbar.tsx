@@ -17,14 +17,19 @@ export default function Navbar() {
 		<header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
 			<div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
 				<Link href="/" className="flex items-center" suppressHydrationWarning>
+					{/*
+						Both SVGs have very different intrinsic sizes
+						(123×29 vs 272×63). We constrain by height + auto width
+						so the dark-mode logo matches the light-mode logo
+						visually, regardless of the SVG's natural dimensions.
+					*/}
 					<Image
 						src={assetPath("/images/logo.svg")}
 						alt="Searce"
 						width={120}
 						height={26}
 						priority
-						style={{ width: "auto", height: "auto" }}
-						className="block dark:hidden"
+						className="block h-[26px] w-auto dark:hidden"
 					/>
 					<Image
 						src={assetPath("/images/searce-logo-white.svg")}
@@ -32,8 +37,7 @@ export default function Navbar() {
 						width={120}
 						height={26}
 						priority
-						style={{ width: "auto", height: "auto" }}
-						className="hidden dark:block"
+						className="hidden h-[26px] w-auto dark:block"
 					/>
 				</Link>
 

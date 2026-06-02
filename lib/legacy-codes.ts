@@ -93,6 +93,12 @@ export function migrateLegacyInput(
 	const instructions = (raw as { instructions?: string }).instructions ?? raw.notes ?? "";
 	const myNotes = (raw as { myNotes?: string }).myNotes ?? "";
 
+	const sequenceCount = (raw as { sequenceCount?: number }).sequenceCount;
+	const normalizedSequenceCount =
+		sequenceCount === 2 || sequenceCount === 3 || sequenceCount === 4 || sequenceCount === 5
+			? (sequenceCount as 2 | 3 | 4 | 5)
+			: 1;
+
 	return {
 		...raw,
 		targetPersonaIndustry: industry,
@@ -100,5 +106,6 @@ export function migrateLegacyInput(
 		targetPersonaSubCategory,
 		instructions,
 		myNotes,
+		sequenceCount: normalizedSequenceCount,
 	} as Partial<GenerationInput>;
 }

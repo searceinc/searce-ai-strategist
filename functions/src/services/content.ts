@@ -31,6 +31,27 @@ const SINGLE_EMAIL_FORMATS: ReadonlySet<ContentFormat> = new Set([
 	"linkedin_inmail",
 ]);
 
+/**
+ * Formats that can be rendered through the sequence schema when the rep
+ * picks `sequenceCount > 1`. Conversation Ads stay single-flow (their
+ * multi-message structure is inherent to the format).
+ */
+const SEQUENCE_CAPABLE_FORMATS: ReadonlySet<ContentFormat> = new Set([
+	"cold_email",
+	"sales_email",
+	"nurture_email",
+	"linkedin_inmail",
+	"email_sequence",
+]);
+
+function resolveSequenceCount(input: GenerationInput): number {
+	if (input.selectedFormat === "email_sequence") return input.emailSequenceLength ?? 5;
+	const raw = (input.sequenceCount ?? 1) as number;
+	if (raw < 1) return 1;
+	if (raw > 5) return 5;
+	return raw;
+}
+
 export interface GenerationResult {
 	research: ResearchSnapshot;
 	caseStudyMatches: VerifiedCaseStudy[];
@@ -194,6 +215,37 @@ async function generateForFormat({
 	userPrompt,
 	geminiKey,
 }: GenerateArgs): Promise<string> {
+	const desiredSequenceCount = resolveSequenceCount(input);
+
+	// Multi-touch path: any sequence-capable format with count > 1, or the
+	// dedicated email_sequence format. Renders through SEQUENCE_SCHEMA.
+	const wantsSequenceSchema =
+		(SEQUENCE_CAPABLE_FORMATS.has(input.selectedFormat) && desiredSequenceCount > 1) ||
+		input.selectedFormat === "email_sequence";
+
+	if (wantsSequenceSchema) {
+		try {
+			const resp = await generateStructuredWithGemini<SequenceResponse>({
+				apiKey: geminiKey,
+				prompt: userPrompt,
+				systemInstruction: systemPrompt,
+				temperature: 0.35,
+				maxOutputTokens: 6144,
+				responseJsonSchema: SEQUENCE_SCHEMA,
+				validate: isSequenceResponse,
+			});
+			return assembleSequence(resp);
+		} catch (err) {
+			console.warn("Structured sequence generation failed; falling back to text mode.", err);
+			return textModeWithRetry({
+				input,
+				systemPrompt,
+				userPrompt,
+				geminiKey,
+			});
+		}
+	}
+
 	if (SINGLE_EMAIL_FORMATS.has(input.selectedFormat)) {
 		try {
 			const resp = await generateStructuredWithGemini<SingleEmailResponse>({
@@ -232,32 +284,6 @@ async function generateForFormat({
 		}
 	}
 
-	if (input.selectedFormat === "email_sequence") {
-		try {
-			const resp = await generateStructuredWithGemini<SequenceResponse>({
-				apiKey: geminiKey,
-				prompt: userPrompt,
-				systemInstruction: systemPrompt,
-				temperature: 0.35,
-				maxOutputTokens: 6144,
-				responseJsonSchema: SEQUENCE_SCHEMA,
-				validate: isSequenceResponse,
-			});
-			return assembleSequence(resp);
-		} catch (err) {
-			console.warn(
-				"Structured generation failed for sequence; falling back to text mode.",
-				err,
-			);
-			return textModeWithRetry({
-				input,
-				systemPrompt,
-				userPrompt,
-				geminiKey,
-			});
-		}
-	}
-
 	// Conversation Ad and anything else — keep the previous text + compliance
 	// retry pipeline. Schema for the multi-message branching flow is more
 	// involved and not worth doing until that format is actually used.
@@ -270,7 +296,7 @@ async function generateForFormat({
  * this override the user's last fallback runs produced raw JSON in the UI
  * (because the schema-mode prompt told Gemini to return JSON).
  */
-const TEXT_MODE_OVERRIDE = `
+const TEXT_MODE_OVERRIDE_SINGLE = `
 ## OVERRIDE — TEXT MODE
 This run does NOT use a JSON schema. DO NOT return JSON. Output PLAIN TEXT in the marker format below. Anything that looks like a JSON object or array is a hard failure.
 
@@ -318,13 +344,73 @@ Rules: only Searce-domain Markdown anchors in the body, no external links. No "H
 - LONG: many short paragraphs (5–9 blocks), ~180 words max (~130 InMail). SHORT: 4–7 blocks, ~128 words (~88 InMail). **Bold** 4–7 times in LONG and 3–5 in SHORT: pair stats with nouns, stress 2–4 word pain phrases, use **Label:** on comparison bullets when it helps — never bold glue words alone (before, after, when, the, we, …). Square-bracket CRM tokens ONLY: [FirstName], [LastName], [Company name], [Industry name] — use **only when tone warrants** (see system prompt); never pad; no other [bracket] fillers.
 `;
 
+function textModeOverrideForSequence(count: number): string {
+	const n = Math.max(2, Math.min(6, count));
+	const blocks: string[] = [];
+	for (let i = 1; i <= n; i++) {
+		blocks.push(`EMAIL ${i} — <short title>
+
+SUBJECT OPTION A: <subject>
+PREVIEW A: <preview>
+SUBJECT OPTION B: <subject>
+PREVIEW B: <preview>
+SUBJECT OPTION C: <subject>
+PREVIEW C: <preview>
+
+Hi [FirstName],
+
+<micro-paragraph 1 — 1–2 sentences>
+
+<micro-paragraph 2 — 1–2 sentences>
+
+<more micro-paragraphs as needed — aim 5–9 short blocks total, each 1–3 lines>
+
+<final micro-paragraph: peer-style low-friction ask>
+
+[Your Name] | Searce`);
+	}
+	return `
+## OVERRIDE — TEXT MODE (SEQUENCE)
+This run does NOT use a JSON schema. DO NOT return JSON. Output PLAIN TEXT in the marker format below — exactly ${n} emails separated by a line of three dashes (\`---\`). Each email keeps the same voice as the chosen format.
+
+${blocks.join("\n\n---\n\n")}
+
+---
+STRATEGIST NOTE:
+<2–3 sentences explaining the angle of the sequence + the specific signal that drove it>
+
+Rules: only Searce-domain Markdown anchors in any email body, no external links. Per email word total ≤ ~170 (closing email ≤ ~102). **Bold** 4–7 short spans per email — metrics + their nouns, 2–4 word pain phrases, **Label:** lines in bullet blocks; never bold glue words alone.
+`;
+}
+
 async function textModeWithRetry({
 	input,
 	systemPrompt,
 	userPrompt,
 	geminiKey,
 }: GenerateArgs): Promise<string> {
-	const textPrompt = `${userPrompt}\n${TEXT_MODE_OVERRIDE}`;
+	const desiredSequenceCount = resolveSequenceCount(input);
+	// Convo ad sequences are produced as N variant flows in text mode — the
+	// format prompt itself contains the structure; no extra override needed.
+	// For single-email formats falling back to text mode (cold/sales/nurture/
+	// inmail) we still emit the LONG / SHORT contract.
+	const isConvoAd = input.selectedFormat === "linkedin_conversational_ad";
+	const wantsSequenceOverride =
+		!isConvoAd &&
+		(input.selectedFormat === "email_sequence" ||
+			(SEQUENCE_CAPABLE_FORMATS.has(input.selectedFormat) && desiredSequenceCount > 1));
+	let override: string;
+	if (isConvoAd) {
+		// Conversation Ad: the format prompt is self-describing for both
+		// single + sequence variants. Skip the LONG/SHORT marker override
+		// entirely so the model doesn't get conflicting instructions.
+		override = "";
+	} else if (wantsSequenceOverride) {
+		override = textModeOverrideForSequence(desiredSequenceCount);
+	} else {
+		override = TEXT_MODE_OVERRIDE_SINGLE;
+	}
+	const textPrompt = override ? `${userPrompt}\n${override}` : userPrompt;
 
 	let generatedContent = await generateWithGemini({
 		apiKey: geminiKey,
@@ -334,7 +420,7 @@ async function textModeWithRetry({
 		maxOutputTokens: 4096,
 	});
 
-	const compliance = checkCompliance(generatedContent, input.selectedFormat);
+	const compliance = checkCompliance(generatedContent, input);
 	if (!compliance.ok) {
 		const corrective = buildCorrectivePrompt(compliance.reasons);
 		try {
@@ -345,7 +431,7 @@ async function textModeWithRetry({
 				temperature: 0.25,
 				maxOutputTokens: 4096,
 			});
-			const recheck = checkCompliance(rewritten, input.selectedFormat);
+			const recheck = checkCompliance(rewritten, input);
 			if (recheck.reasons.length <= compliance.reasons.length) {
 				generatedContent = rewritten;
 			}

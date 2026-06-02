@@ -4,6 +4,7 @@ import type {
 	LinkedinInmailVariation,
 	NurtureTemplate,
 	SearceService,
+	SequenceCount,
 	StrategicAngle,
 } from "@/lib/types";
 import {
@@ -23,9 +24,20 @@ import {
 
 const SHEET_INDUSTRY_OPTIONS: IndustryOption[] = SHEET_INDUSTRIES;
 
+/**
+ * General POV — no sub-industry / category locked in. The model relies on
+ * Tavily research + company website to shape the angle, and skips workbook
+ * pain points. Keep this option at the top so it surfaces first.
+ */
+const GENERAL_INDUSTRY_OPTION: IndustryOption = {
+	value: "GENERAL",
+	label: "General (any industry)",
+};
+
 const EXTRA_INDUSTRY_OPTIONS: IndustryOption[] = [{ value: "MISC", label: "Other Industries" }];
 
 export const INDUSTRIES: ReadonlyArray<IndustryOption> = [
+	GENERAL_INDUSTRY_OPTION,
 	...SHEET_INDUSTRY_OPTIONS,
 	...EXTRA_INDUSTRY_OPTIONS,
 ];
@@ -127,6 +139,22 @@ export const EMAIL_SEQUENCE_LENGTH_OPTIONS: {
 	{ value: 6, label: "6 emails (+ strategic check-in)" },
 ];
 
+/**
+ * Universal "Sequence count" selector used by every non-`email_sequence`
+ * content format (cold / sales / nurture / linkedin_inmail / linkedin_conversational_ad).
+ * Default is 1 — a single touch behaves like today's UI.
+ */
+export const SEQUENCE_COUNT_OPTIONS: {
+	value: SequenceCount;
+	label: string;
+}[] = [
+	{ value: 1, label: "1 (single touch)" },
+	{ value: 2, label: "2-touch sequence" },
+	{ value: 3, label: "3-touch sequence" },
+	{ value: 4, label: "4-touch sequence" },
+	{ value: 5, label: "5-touch sequence" },
+];
+
 export const LINKEDIN_INMAIL_VARIATION_OPTIONS: {
 	value: LinkedinInmailVariation;
 	label: string;
@@ -147,6 +175,11 @@ export const LINKEDIN_INMAIL_VARIATION_OPTIONS: {
 // ─── Searce Services ────────────────────────────────────────────────────────
 
 export const SEARCE_SERVICES: { value: SearceService; label: string; description: string }[] = [
+	{
+		value: "general",
+		label: "General Service",
+		description: "Any Searce capability; let the AI decide based on the prospect",
+	},
 	{
 		value: "cloud_modernization",
 		label: "Cloud Modernisation",

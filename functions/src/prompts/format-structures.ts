@@ -10,6 +10,21 @@ import type { GenerationInput } from "../types.js";
  * paragraph should accomplish per format, not HOW to format it.
  */
 export function buildFormatInstructions(input: GenerationInput): string {
+	const sequenceCount = resolveSequenceCount(input);
+
+	// Conversation Ads keep their text-mode pipeline; for sequenceCount > 1
+	// we render N variant flows tagged with EMAIL N headers so the parser
+	// can show them as tabs.
+	if (input.selectedFormat === "linkedin_conversational_ad") {
+		return linkedinConversationAdContent(sequenceCount);
+	}
+
+	// Multi-touch path (cold/sales/nurture/inmail with sequenceCount > 1,
+	// or the dedicated email_sequence format). Drives SEQUENCE_SCHEMA.
+	if (sequenceCount > 1 || input.selectedFormat === "email_sequence") {
+		return multiTouchSequenceContent(input, sequenceCount);
+	}
+
 	switch (input.selectedFormat) {
 		case "cold_email":
 			return coldEmailContent();
@@ -17,15 +32,19 @@ export function buildFormatInstructions(input: GenerationInput): string {
 			return salesEmailContent();
 		case "nurture_email":
 			return nurtureEmailContent(input.nurtureTemplate);
-		case "email_sequence":
-			return emailSequenceContent(input.emailSequenceLength);
 		case "linkedin_inmail":
 			return linkedinInmailContent(input.linkedinInmailVariation);
-		case "linkedin_conversational_ad":
-			return linkedinConversationAdContent();
 		default:
 			return coldEmailContent();
 	}
+}
+
+function resolveSequenceCount(input: GenerationInput): number {
+	if (input.selectedFormat === "email_sequence") return input.emailSequenceLength ?? 5;
+	const raw = (input.sequenceCount ?? 1) as number;
+	if (raw < 1) return 1;
+	if (raw > 5) return 5;
+	return raw;
 }
 
 const COMMON_PARAGRAPH_GUIDANCE = `
@@ -92,38 +111,86 @@ ${angleByTemplate[template] ?? angleByTemplate["1"]}
 `;
 }
 
-function emailSequenceContent(length: GenerationInput["emailSequenceLength"]): string {
-	const n = length;
-	const beats: Record<number, string> = {
-		1: `EMAIL 1 — Hindsight trap: open with a daily-reality question for a [Job Title] in this sub-category about reporting lag / operational visibility. Pain → ONE verified Searce before/after metric anchored on the client name. CTA = peer-style ask.`,
-		2: `EMAIL 2 — Infrastructure anchor: open with one operational/strategic constraint a [Job Title] lives with, framed as a provocative question. Tell ONE secure cloud foundation outcome from a verified case (Searce anchor). CTA = peer-style ask.`,
-		3: `EMAIL 3 — Predictive edge: tie the [Job Title]'s asset/risk reality to predicting failures before they happen. ONE verified monitoring-at-scale outcome (anchor on client name). CTA = peer-style ask.`,
-		4: `EMAIL 4 — Documentation bottleneck: what would the [Job Title] do with reclaimed hours? ONE verified AI/automation outcome with anchor on client name. CTA = peer-style ask.`,
-		5: `EMAIL 5 — Strategic closer: tie to a strategic objective the [Job Title] is measured on this year. Compound advantage from ONE verified sub-industry outcome. CTA = peer-style ask.`,
-		6: `EMAIL 6 — Cost of inaction (shortest, ≤ 60 words): candid question on margin lost to inefficiency, tied to a current operating constraint. ONE verified Searce example. CTA = peer-style ask.`,
-	};
+/**
+ * Beat library for the dedicated `email_sequence` format. Verbose, narrative
+ * arc that flows across 3 / 5 / 6 touches.
+ */
+const EMAIL_SEQUENCE_BEATS: Record<number, string> = {
+	1: `EMAIL 1 — Hindsight trap: open with a daily-reality question for a [Job Title] in this sub-category about reporting lag / operational visibility. Pain → ONE verified Searce before/after metric anchored on the client name. CTA = peer-style ask.`,
+	2: `EMAIL 2 — Infrastructure anchor: open with one operational/strategic constraint a [Job Title] lives with, framed as a provocative question. Tell ONE secure cloud foundation outcome from a verified case (Searce anchor). CTA = peer-style ask.`,
+	3: `EMAIL 3 — Predictive edge: tie the [Job Title]'s asset/risk reality to predicting failures before they happen. ONE verified monitoring-at-scale outcome (anchor on client name). CTA = peer-style ask.`,
+	4: `EMAIL 4 — Documentation bottleneck: what would the [Job Title] do with reclaimed hours? ONE verified AI/automation outcome with anchor on client name. CTA = peer-style ask.`,
+	5: `EMAIL 5 — Strategic closer: tie to a strategic objective the [Job Title] is measured on this year. Compound advantage from ONE verified sub-industry outcome. CTA = peer-style ask.`,
+	6: `EMAIL 6 — Cost of inaction (shortest, ≤ 60 words): candid question on margin lost to inefficiency, tied to a current operating constraint. ONE verified Searce example. CTA = peer-style ask.`,
+};
 
-	const beatsList = Array.from({ length: n }, (_, i) => beats[i + 1] ?? "")
+/**
+ * Beat library used when the rep picks `sequenceCount > 1` on a single-email
+ * format (cold / sales / nurture / linkedin_inmail). Generic, format-agnostic
+ * cadence — every touch must still read like the chosen format.
+ */
+const GENERIC_SEQUENCE_BEATS: Record<number, string> = {
+	1: `TOUCH 1 — Open with a sharp, role-aware hook tied to a real signal (recent news, sub-industry shift, or a peer pattern). Land ONE verified Searce outcome anchored on the client name. CTA = peer-style ask.`,
+	2: `TOUCH 2 — Reframe the pain from a different angle (cost / risk / margin / time). Tell ONE different verified case if possible; otherwise re-anchor on the same client name. CTA = small commitment (15-minute exchange of notes / one-pager).`,
+	3: `TOUCH 3 — Provoke with a contrast: legacy way vs. modern way. Use a 2-line **•** bullet block if helpful (Legacy process / AI-native path / Result). ONE Searce anchor. CTA = exchange of notes.`,
+	4: `TOUCH 4 — Strategic closer: tie to an objective the [Job Title] is measured on this quarter. ONE verified Searce outcome. CTA = explicit time slot or one-pager.`,
+	5: `TOUCH 5 — Final nudge (shortest, ≤ 90 words). Candid one-liner on the cost of waiting. ONE Searce anchor. CTA = single, low-friction ask.`,
+};
+
+function multiTouchSequenceContent(input: GenerationInput, count: number): string {
+	const n = Math.max(1, Math.min(6, count));
+	const isDedicated = input.selectedFormat === "email_sequence";
+	const beatsSource = isDedicated ? EMAIL_SEQUENCE_BEATS : GENERIC_SEQUENCE_BEATS;
+	const formatLabel = formatDisplayName(input.selectedFormat);
+
+	const beatsList = Array.from({ length: n }, (_, i) => beatsSource[i + 1] ?? "")
 		.filter(Boolean)
 		.join("\n");
 
-	return `## EMAIL SEQUENCE (${n} emails)
+	const headline = isDedicated
+		? `EMAIL SEQUENCE (${n} emails)`
+		: `${formatLabel.toUpperCase()} SEQUENCE (${n} touches)`;
 
-For \`emails\`, output exactly ${n} email objects. Each email follows the same paragraph rhythm as a single email:
+	const styleNote = isDedicated
+		? ""
+		: `STYLE FOR EVERY TOUCH: write each email as a ${formatLabel} (same voice, same hook style, same CTA register). The sequence is N touches of the SAME format — not a mix.\n`;
+
+	return `## ${headline}
+
+For \`emails\`, output exactly ${n} email objects. Each touch follows the same paragraph rhythm as a single email of this format:
 
 ${COMMON_PARAGRAPH_GUIDANCE}
 
-PER-EMAIL ANGLES (apply each beat to the matching email index):
+${styleNote}PER-TOUCH ANGLES (apply each beat to the matching index):
 ${beatsList}
 
 OPTIONAL \`cadenceLine\` field: a single positive-string cadence suggestion like "Day 1 / Day 4 / Day 7 / Day 14 / Day 21". Do NOT prefix with "-" or any other character. Leave empty if unsure.
 
-PER-EMAIL RULES:
-- Each email needs a DISTINCT hook AND distinct persona detail in P1 (bake the [Job Title] reality into the first sentence — never label it).
-- Per-email word total: ≤ ~170 words (the closing email may run ≤ ~102 words).
-- ONE Searce anchor per email max. No external-source anchors.
-- 3 subject options per email (the first email may use 4).
+PER-TOUCH RULES:
+- Each touch needs a DISTINCT hook AND distinct persona detail in the opening line (bake the [Job Title] reality into the first sentence — never label it).
+- Per-touch word total: ≤ ~170 words (a final / closing touch may run ≤ ~102 words).
+- ONE Searce anchor per touch max. No external-source anchors.
+- 3 subject options per touch (the first touch may use 4).
 `;
+}
+
+function formatDisplayName(format: GenerationInput["selectedFormat"]): string {
+	switch (format) {
+		case "cold_email":
+			return "Cold email";
+		case "sales_email":
+			return "Sales email";
+		case "nurture_email":
+			return "Nurture email";
+		case "linkedin_inmail":
+			return "LinkedIn InMail";
+		case "linkedin_conversational_ad":
+			return "LinkedIn Conversation Ad";
+		case "email_sequence":
+			return "Email";
+		default:
+			return "Email";
+	}
 }
 
 function linkedinInmailContent(variation: GenerationInput["linkedinInmailVariation"]): string {
@@ -157,13 +224,14 @@ ${angleByVariation[variation] ?? angleByVariation["1"]}
  * Conversation Ad still uses text-mode generation (it has a branching
  * multi-message structure that doesn't fit the single/sequence schema). The
  * compliance-retry loop handles it.
+ *
+ * When `sequenceCount > 1`, we ask the model to produce N distinct variant
+ * flows, each headed with `EMAIL N — <variant title>` so the UI parser
+ * surfaces them as separate tabs the rep can A/B between.
  */
-function linkedinConversationAdContent(): string {
-	return `## LINKEDIN CONVERSATION AD (Sponsored Messaging — choose-your-own-path)
-
-This format uses text mode (not the single-email schema). Output the structure below, with each MESSAGE as natural prose. NO structural labels other than the MESSAGE / BUTTON markers.
-
-CONVERSATION AD — OVERVIEW
+function linkedinConversationAdContent(sequenceCount: number): string {
+	const n = Math.max(1, Math.min(5, sequenceCount));
+	const singleFlow = `CONVERSATION AD — OVERVIEW
 Banner headline + one-line value prop. Headline < 70 chars.
 
 ---
@@ -192,7 +260,14 @@ BUTTON A: <e.g. "Book 15 min">
 BUTTON B: <e.g. "Email me">
 
 OPTIONAL LEAD GEN FORM LINE:
-If using a Lead Gen Form, list field labels only — never invent form URLs.
+If using a Lead Gen Form, list field labels only — never invent form URLs.`;
+
+	if (n === 1) {
+		return `## LINKEDIN CONVERSATION AD (Sponsored Messaging — choose-your-own-path)
+
+This format uses text mode (not the single-email schema). Output the structure below, with each MESSAGE as natural prose. NO structural labels other than the MESSAGE / BUTTON markers.
+
+${singleFlow}
 
 ---
 STRATEGIST NOTE:
@@ -202,4 +277,33 @@ RULES:
 - Whole flow under ~280 words.
 - Buttons must be ultra-short; conversational tone; no corporate jargon walls.
 - Inline anchors only on verified Searce client names. No external-source anchors. No trailing source block.`;
+	}
+
+	return `## LINKEDIN CONVERSATION AD SEQUENCE — ${n} variant flows
+
+This format uses text mode (not the single-email schema). Output **${n} distinct conversation-ad variants**, each with its OWN complete CYOP flow (banner + MESSAGE 1 + branching MESSAGE 2A / 2B + MESSAGE 3 + optional Lead Gen Form). Each variant explores a different angle (e.g. pain question vs. ROI hook vs. social proof story vs. provocation).
+
+OUTPUT STRUCTURE — exactly ${n} variants. Each MUST start with the header below so the rep sees them as separate tabs:
+
+EMAIL 1 — <variant title (e.g. "Pain Question hook")>
+
+${singleFlow}
+
+---
+
+EMAIL 2 — <variant title>
+
+${singleFlow}
+
+(…continue for a total of ${n} variants…)
+
+---
+STRATEGIST NOTE:
+Two to three sentences on the angle of the SEQUENCE (why these ${n} variants together) + the specific signal that drove the angle.
+
+RULES (every variant must obey):
+- Each variant: whole flow under ~280 words.
+- Each variant: ONE Searce inline anchor on a verified client name (zero external links).
+- Buttons ultra-short; conversational; no corporate jargon walls.
+- Variants must read distinctly different — never repeat the same hook with cosmetic tweaks.`;
 }

@@ -20,11 +20,14 @@ export type ContentFormat =
 
 export type NurtureTemplate = "1" | "2" | "3";
 export type EmailSequenceLength = 3 | 5 | 6;
+/** Universal multi-touch count for any single-email format (1 = single). */
+export type SequenceCount = 1 | 2 | 3 | 4 | 5;
 export type LinkedinInmailVariation = "1" | "2";
 
 export type StrategicAngle = "pain_point" | "roi_metrics" | "social_proof" | "direct_pitch";
 
 export type SearceService =
+	| "general"
 	| "cloud_modernization"
 	| "data_analytics"
 	| "ai_automation"
@@ -65,6 +68,13 @@ export interface GenerationInput {
 	nurtureTemplate: NurtureTemplate;
 	emailSequenceLength: EmailSequenceLength;
 	linkedinInmailVariation: LinkedinInmailVariation;
+	/**
+	 * Universal multi-touch count for single-email formats (default 1).
+	 * When > 1, the format is rendered through the sequence schema so cold /
+	 * sales / nurture / linkedin_inmail / linkedin_conversational_ad all support
+	 * multi-touch like the dedicated email_sequence format.
+	 */
+	sequenceCount: SequenceCount;
 	/**
 	 * Ephemeral: when set, the model must center the email on this Intelligence Feed
 	 * signal. Cleared before persisting sessions; not shown in the config form.

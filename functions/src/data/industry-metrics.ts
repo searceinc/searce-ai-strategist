@@ -51,9 +51,14 @@ const METRICS: Record<string, string[]> = {
 		"IDC indicates companies with mature cloud operations reduce IT costs by 25-40%",
 		"Industry Standard: McKinsey reports digital transformation initiatives deliver 3x ROI within 18 months",
 	],
+	GENERAL: [
+		"Gartner reports cloud-first organizations cut time-to-market by 30% and unlock 20-25% productivity gains",
+		"IDC research shows enterprises with mature AI + data platforms see 35% improvement in operational efficiency",
+		"Industry Standard: McKinsey indicates targeted digital transformation programs return 3x ROI within 18 months",
+	],
 };
 
 export function getIndustryMetrics(industryCode: string): string[] {
 	const canonical = migrateIndustryCode(industryCode);
-	return METRICS[canonical] ?? METRICS.MISC!;
+	return METRICS[canonical] ?? METRICS.GENERAL ?? METRICS.MISC!;
 }

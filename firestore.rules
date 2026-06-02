@@ -12,5 +12,13 @@ service cloud.firestore {
         && resource.data.userId == request.auth.uid;
       allow create, update, delete: if false;
     }
+
+    // Prospect lists (CSV / XLSX) are written by Cloud Functions (Admin SDK).
+    // Owners may read their own uploads; all client writes go through callables.
+    match /prospect_uploads/{uploadId} {
+      allow read: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
   }
 }

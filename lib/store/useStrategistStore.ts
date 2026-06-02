@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { DEFAULT_GENERATION_INPUT, normalizeGenerationInput } from "@/lib/default-generation-input";
+import type { ParsedProspectUpload } from "@/lib/prospect-upload";
 import {
 	normalizeResearchSnapshot,
 	type FallbackPath,
@@ -11,11 +12,22 @@ import {
 	type VerifiedCaseStudy,
 } from "@/lib/types";
 
+/** A parsed prospect list plus the Firestore doc id it was persisted under. */
+export interface ProspectUploadState extends ParsedProspectUpload {
+	/** Firestore document id (null while the upload is still saving). */
+	uploadId: string | null;
+}
+
 interface StrategistState {
 	// ── Config form ──
 	input: GenerationInput;
 	setInput: (partial: Partial<GenerationInput>) => void;
 	resetInput: () => void;
+
+	// ── Prospect upload (CSV / XLSX → Company Intel dropdowns) ──
+	prospectUpload: ProspectUploadState | null;
+	setProspectUpload: (upload: ProspectUploadState | null) => void;
+	clearProspectUpload: () => void;
 
 	// ── Generation state ──
 	isGenerating: boolean;
@@ -54,6 +66,10 @@ export const useStrategistStore = create<StrategistState>((set) => ({
 	input: { ...DEFAULT_GENERATION_INPUT },
 	setInput: (partial) => set((s) => ({ input: { ...s.input, ...partial } })),
 	resetInput: () => set({ input: { ...DEFAULT_GENERATION_INPUT } }),
+
+	prospectUpload: null,
+	setProspectUpload: (upload) => set({ prospectUpload: upload }),
+	clearProspectUpload: () => set({ prospectUpload: null }),
 
 	isGenerating: false,
 	currentSessionId: null,

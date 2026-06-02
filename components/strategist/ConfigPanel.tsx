@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	Building2,
 	Globe,
@@ -18,6 +18,9 @@ import {
 	Shield,
 	HelpCircle,
 	NotebookPen,
+	Upload,
+	X,
+	FileSpreadsheet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -36,7 +39,21 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStrategistStore } from "@/lib/store/useStrategistStore";
-import { callGenerateContent, callRegenerateContent } from "@/lib/firebase/firestore";
+import {
+	callGenerateContent,
+	callRegenerateContent,
+	callSaveProspectUpload,
+} from "@/lib/firebase/firestore";
+import {
+	parseProspectFile,
+	getColumnValues,
+	findRowByValue,
+	PROSPECT_FIELDS,
+	PROSPECT_FIELD_LABEL,
+	ACCEPTED_FILE_EXTENSIONS,
+	ACCEPTED_FILE_ACCEPT_ATTR,
+	type ProspectField,
+} from "@/lib/prospect-upload";
 import {
 	CONTENT_FORMATS,
 	EMAIL_SEQUENCE_LENGTH_OPTIONS,
@@ -49,13 +66,41 @@ import {
 	getSubCategoryOptions,
 	CLOUD_ECOSYSTEMS,
 	STRATEGIC_ANGLES,
+	SEQUENCE_COUNT_OPTIONS,
 } from "@/lib/constants";
 import type {
 	ContentFormat,
 	EmailSequenceLength,
+	GenerationInput,
 	SearceService,
+	SequenceCount,
 	StrategicAngle,
 } from "@/lib/types";
+
+/**
+ * Formats that support the universal multi-touch selector. `email_sequence`
+ * uses its own length dropdown; `linkedin_conversational_ad` is inherently
+ * multi-message so we don't double-stack sequences there.
+ */
+const SEQUENCEABLE_FORMATS: ReadonlySet<ContentFormat> = new Set<ContentFormat>([
+	"cold_email",
+	"sales_email",
+	"nurture_email",
+	"linkedin_inmail",
+	"linkedin_conversational_ad",
+]);
+
+const GENERAL_INDUSTRY_VALUE = "GENERAL";
+
+/** Which GenerationInput field each detected sheet column feeds. */
+const PROSPECT_FIELD_TO_INPUT: Record<
+	ProspectField,
+	"targetCompany" | "targetDomain" | "targetLinkedInUrl"
+> = {
+	company: "targetCompany",
+	website: "targetDomain",
+	linkedin: "targetLinkedInUrl",
+};
 
 /** SelectTrigger applies row flex to SelectValue by default; use this for label + subtitle stacks. */
 const stackedSelectTriggerClass =
@@ -72,7 +117,13 @@ export default function ConfigPanel() {
 		setGenerating,
 		setGenerationResult,
 		setGenerationError,
+		prospectUpload,
+		setProspectUpload,
+		clearProspectUpload,
 	} = useStrategistStore();
+
+	const fileInputRef = useRef<HTMLInputElement>(null);
+	const [isUploading, setIsUploading] = useState(false);
 
 	useEffect(() => {
 		const cats = getCategoryOptions(input.targetPersonaIndustry);
@@ -99,15 +150,11 @@ export default function ConfigPanel() {
 		}
 	}, [input.targetPersonaIndustry, input.targetPersonaCategory]); // eslint-disable-line react-hooks/exhaustive-deps
 
-	const canGenerate =
-		input.targetPersonaIndustry.trim() &&
-		input.targetPersonaCategory.trim() &&
-		input.region.trim() &&
-		input.selectedService.trim();
+	const canGenerate = input.region.trim() && input.selectedService.trim();
 
 	async function handleGenerate() {
 		if (!canGenerate) {
-			toast.error("Please fill in Industry, Category, Region and Service");
+			toast.error("Please fill in Region and Service (Industry can be General)");
 			return;
 		}
 
@@ -144,11 +191,121 @@ export default function ConfigPanel() {
 		}
 	}
 
+	async function handleFileSelected(file: File | undefined) {
+		if (!file) return;
+
+		const dot = file.name.lastIndexOf(".");
+		const ext = dot >= 0 ? file.name.slice(dot).toLowerCase() : "";
+		if (!ACCEPTED_FILE_EXTENSIONS.includes(ext as (typeof ACCEPTED_FILE_EXTENSIONS)[number])) {
+			toast.error("Unsupported file. Please upload a .csv or .xlsx file.");
+			if (fileInputRef.current) fileInputRef.current.value = "";
+			return;
+		}
+
+		setIsUploading(true);
+		try {
+			const parsed = await parseProspectFile(file);
+
+			const matched = PROSPECT_FIELDS.filter((f) => parsed.matchedFields[f]);
+			if (matched.length === 0) {
+				toast.error(
+					"No Company, Website, or LinkedIn columns found. Check your header row.",
+				);
+				return;
+			}
+			if (parsed.rows.length === 0) {
+				toast.error("Couldn't find any data rows in this file.");
+				return;
+			}
+
+			// Show dropdowns immediately, then persist to Firestore.
+			setProspectUpload({ ...parsed, uploadId: null });
+
+			const labels = matched.map((f) => PROSPECT_FIELD_LABEL[f]).join(", ");
+			try {
+				const uploadId = await callSaveProspectUpload(parsed);
+				setProspectUpload({ ...parsed, uploadId });
+				toast.success(`Loaded ${parsed.rows.length} rows · ${labels}`);
+			} catch (saveErr) {
+				const msg = saveErr instanceof Error ? saveErr.message : "save failed";
+				toast.error(`List loaded, but saving to Firestore failed: ${msg}`);
+			}
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : "Failed to read this file";
+			toast.error(msg);
+		} finally {
+			setIsUploading(false);
+			// Reset so selecting the same file again re-triggers onChange.
+			if (fileInputRef.current) fileInputRef.current.value = "";
+		}
+	}
+
+	function handleProspectSelect(field: ProspectField, value: string) {
+		const patch: Partial<GenerationInput> = {};
+		patch[PROSPECT_FIELD_TO_INPUT[field]] = value;
+
+		// Selecting a company links its row, auto-filling the other detected fields.
+		if (field === "company" && prospectUpload) {
+			const row = findRowByValue(prospectUpload.rows, "company", value);
+			if (row) {
+				if (prospectUpload.matchedFields.website && row.website) {
+					patch.targetDomain = row.website;
+				}
+				if (prospectUpload.matchedFields.linkedin && row.linkedin) {
+					patch.targetLinkedInUrl = row.linkedin;
+				}
+			}
+		}
+
+		setInput(patch);
+	}
+
+	function handleClearUpload() {
+		clearProspectUpload();
+		if (fileInputRef.current) fileInputRef.current.value = "";
+	}
+
 	const currentCategories = getCategoryOptions(input.targetPersonaIndustry);
 	const currentSubCategories = getSubCategoryOptions(
 		input.targetPersonaIndustry,
 		input.targetPersonaCategory,
 	);
+
+	/**
+	 * Render a Company Intel field as a dropdown sourced from the uploaded list
+	 * when that column was detected, otherwise fall back to the manual text input.
+	 */
+	function renderCompanyField(
+		field: ProspectField,
+		value: string,
+		placeholder: string,
+		manualInput: React.ReactNode,
+	) {
+		if (!prospectUpload || !prospectUpload.matchedFields[field]) {
+			return manualInput;
+		}
+		const options = getColumnValues(prospectUpload.rows, field);
+		return (
+			<Select value={value} onValueChange={(v) => handleProspectSelect(field, v)}>
+				<SelectTrigger className="w-full">
+					<SelectValue placeholder={placeholder} />
+				</SelectTrigger>
+				<SelectContent>
+					{options.map((opt) => (
+						<SelectItem key={opt} value={opt}>
+							{opt}
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
+		);
+	}
+
+	const matchedFieldLabels = prospectUpload
+		? PROSPECT_FIELDS.filter((f) => prospectUpload.matchedFields[f]).map(
+				(f) => PROSPECT_FIELD_LABEL[f],
+			)
+		: [];
 
 	return (
 		<Card className="flex h-full flex-col overflow-hidden">
@@ -170,28 +327,139 @@ export default function ConfigPanel() {
 						</legend>
 
 						<FormField icon={Building2} label="Company Name">
-							<Input
-								placeholder="e.g. Acme Corp (optional)"
-								value={input.targetCompany}
-								onChange={(e) => setInput({ targetCompany: e.target.value })}
-							/>
+							{renderCompanyField(
+								"company",
+								input.targetCompany,
+								"Select a company from your list",
+								<Input
+									placeholder="e.g. Acme Corp (optional)"
+									value={input.targetCompany}
+									onChange={(e) => setInput({ targetCompany: e.target.value })}
+								/>,
+							)}
 						</FormField>
 
 						<FormField icon={Globe} label="Website / Domain">
-							<Input
-								placeholder="e.g. acmecorp.com"
-								value={input.targetDomain}
-								onChange={(e) => setInput({ targetDomain: e.target.value })}
-							/>
+							{renderCompanyField(
+								"website",
+								input.targetDomain,
+								"Select a website from your list",
+								<Input
+									placeholder="e.g. acmecorp.com"
+									value={input.targetDomain}
+									onChange={(e) => setInput({ targetDomain: e.target.value })}
+								/>,
+							)}
 						</FormField>
 
 						<FormField icon={Link2} label="LinkedIn URL">
-							<Input
-								placeholder="e.g. linkedin.com/company/acme"
-								value={input.targetLinkedInUrl}
-								onChange={(e) => setInput({ targetLinkedInUrl: e.target.value })}
-							/>
+							{renderCompanyField(
+								"linkedin",
+								input.targetLinkedInUrl,
+								"Select a LinkedIn URL from your list",
+								<Input
+									placeholder="e.g. linkedin.com/company/acme"
+									value={input.targetLinkedInUrl}
+									onChange={(e) =>
+										setInput({ targetLinkedInUrl: e.target.value })
+									}
+								/>,
+							)}
 						</FormField>
+
+						{/* ── Divider ── */}
+						<div className="relative flex items-center justify-center py-0.5">
+							<Separator className="absolute inset-x-0" />
+							<span className="relative bg-card px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+								OR
+							</span>
+						</div>
+
+						{/* ── Bulk upload (CSV / XLSX) ── */}
+						<input
+							ref={fileInputRef}
+							type="file"
+							accept={ACCEPTED_FILE_ACCEPT_ATTR}
+							className="hidden"
+							onChange={(e) => handleFileSelected(e.target.files?.[0])}
+						/>
+
+						{prospectUpload ? (
+							<div className="space-y-2 rounded-md border-2 border-border bg-muted/30 p-3">
+								<div className="flex items-center gap-2">
+									<FileSpreadsheet className="size-4 shrink-0 text-primary" />
+									<div className="min-w-0 flex-1">
+										<p
+											className="truncate text-xs font-medium"
+											title={prospectUpload.fileName}
+										>
+											{prospectUpload.fileName}
+										</p>
+										<p className="text-[10px] text-muted-foreground">
+											{prospectUpload.rows.length} rows ·{" "}
+											{matchedFieldLabels.join(", ")}
+											{prospectUpload.uploadId ? "" : " · saving…"}
+										</p>
+									</div>
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon-sm"
+										className="cursor-pointer"
+										aria-label="Remove uploaded file"
+										onClick={handleClearUpload}
+									>
+										<X className="size-4" />
+									</Button>
+								</div>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									className="w-full cursor-pointer"
+									disabled={isUploading}
+									onClick={() => fileInputRef.current?.click()}
+								>
+									{isUploading ? (
+										<>
+											<Loader2 className="size-3.5 animate-spin" />
+											Reading…
+										</>
+									) : (
+										<>
+											<Upload className="size-3.5" />
+											Replace file
+										</>
+									)}
+								</Button>
+							</div>
+						) : (
+							<div className="space-y-1.5">
+								<Button
+									type="button"
+									variant="outline"
+									className="w-full cursor-pointer"
+									disabled={isUploading}
+									onClick={() => fileInputRef.current?.click()}
+								>
+									{isUploading ? (
+										<>
+											<Loader2 className="size-4 animate-spin" />
+											Reading file…
+										</>
+									) : (
+										<>
+											<Upload className="size-4" />
+											Upload prospect list (CSV, XLSX)
+										</>
+									)}
+								</Button>
+								<p className="text-[10px] leading-snug text-muted-foreground">
+									Include columns for Account Name, Website and LinkedIn — headers
+									are matched automatically.
+								</p>
+							</div>
+						)}
 					</fieldset>
 
 					<Separator />
@@ -206,15 +474,14 @@ export default function ConfigPanel() {
 						<FormField
 							icon={Briefcase}
 							label="Industry"
-							required
-							help="The broad industry sector from the Mapped Pain Points workbook (e.g. FSI, HLS). Drives which categories and sub-categories are available below."
+							help="Pick 'General' for a generic POV based on live research alone, or one of the workbook sectors (FSI, HLS, …) to unlock sub-categories below."
 						>
 							<Select
 								value={input.targetPersonaIndustry}
 								onValueChange={(v) => setInput({ targetPersonaIndustry: v })}
 							>
 								<SelectTrigger className="w-full">
-									<SelectValue placeholder="Select industry" />
+									<SelectValue placeholder="Select industry (optional)" />
 								</SelectTrigger>
 								<SelectContent>
 									{INDUSTRIES.map((i) => (
@@ -229,22 +496,26 @@ export default function ConfigPanel() {
 						<FormField
 							icon={User}
 							label="Category"
-							required
-							help="Sub-industry within the chosen industry (e.g. Banking inside FSI). Cascades from Industry. Determines the pain points the AI uses."
+							help="Sub-industry within the chosen industry (e.g. Banking inside FSI). Optional — leave blank for a more general view. Hidden when Industry is 'General'."
 						>
 							<Select
 								value={input.targetPersonaCategory}
 								onValueChange={(v) => setInput({ targetPersonaCategory: v })}
 								disabled={
-									!input.targetPersonaIndustry || currentCategories.length === 0
+									!input.targetPersonaIndustry ||
+									input.targetPersonaIndustry === GENERAL_INDUSTRY_VALUE ||
+									currentCategories.length === 0
 								}
 							>
 								<SelectTrigger className="w-full">
 									<SelectValue
 										placeholder={
-											input.targetPersonaIndustry
-												? "Select category"
-												: "Pick an industry first"
+											!input.targetPersonaIndustry
+												? "Pick an industry first"
+												: input.targetPersonaIndustry ===
+													  GENERAL_INDUSTRY_VALUE
+													? "General POV — no category needed"
+													: "Select category (optional)"
 										}
 									/>
 								</SelectTrigger>
@@ -258,29 +529,32 @@ export default function ConfigPanel() {
 							</Select>
 						</FormField>
 
-						{currentSubCategories.length > 0 && (
-							<FormField
-								icon={User}
-								label="Sub-Category"
-								help="Most specific level (e.g. Retail & Consumer inside Banking). The AI will pull pain points and use cases mapped exactly to this combination from Sheet 4."
-							>
-								<Select
-									value={input.targetPersonaSubCategory}
-									onValueChange={(v) => setInput({ targetPersonaSubCategory: v })}
+						{input.targetPersonaIndustry !== GENERAL_INDUSTRY_VALUE &&
+							currentSubCategories.length > 0 && (
+								<FormField
+									icon={User}
+									label="Sub-Category"
+									help="Most specific level (e.g. Retail & Consumer inside Banking). The AI will pull pain points and use cases mapped exactly to this combination from Sheet 4."
 								>
-									<SelectTrigger className="w-full">
-										<SelectValue placeholder="Select sub-category" />
-									</SelectTrigger>
-									<SelectContent>
-										{currentSubCategories.map((sc) => (
-											<SelectItem key={sc.value} value={sc.value}>
-												{sc.label}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</FormField>
-						)}
+									<Select
+										value={input.targetPersonaSubCategory}
+										onValueChange={(v) =>
+											setInput({ targetPersonaSubCategory: v })
+										}
+									>
+										<SelectTrigger className="w-full">
+											<SelectValue placeholder="Select sub-category" />
+										</SelectTrigger>
+										<SelectContent>
+											{currentSubCategories.map((sc) => (
+												<SelectItem key={sc.value} value={sc.value}>
+													{sc.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</FormField>
+							)}
 
 						<FormField
 							icon={User}
@@ -582,6 +856,34 @@ export default function ConfigPanel() {
 														{opt.description}
 													</span>
 												</div>
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</FormField>
+						)}
+
+						{SEQUENCEABLE_FORMATS.has(input.selectedFormat) && (
+							<FormField
+								icon={FileText}
+								label="Sequence count"
+								help='How many touches of the same format to generate. 1 = single email (default). 2–5 produces a multi-touch sequence like "Email Sequence", but staying in the chosen format (cold / sales / nurture / InMail / Conversation Ad).'
+							>
+								<Select
+									value={String(input.sequenceCount ?? 1)}
+									onValueChange={(v) =>
+										setInput({
+											sequenceCount: Number(v) as SequenceCount,
+										})
+									}
+								>
+									<SelectTrigger className="w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{SEQUENCE_COUNT_OPTIONS.map((opt) => (
+											<SelectItem key={opt.value} value={String(opt.value)}>
+												{opt.label}
 											</SelectItem>
 										))}
 									</SelectContent>

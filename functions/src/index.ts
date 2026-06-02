@@ -2,8 +2,12 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as z from "zod";
 import { tavilyApiKey, geminiApiKey, db } from "./config.js";
 import { orchestrateGeneration } from "./services/content.js";
-import { saveSession, updateSession } from "./services/db.js";
-import { generationInputSchema } from "./schema.js";
+import {
+	saveSession,
+	updateSession,
+	saveProspectUpload as saveProspectUploadDoc,
+} from "./services/db.js";
+import { generationInputSchema, prospectUploadSchema } from "./schema.js";
 import { docToSessionSummary, serializeSessionDocument } from "./session-read.js";
 
 /**
@@ -266,6 +270,41 @@ export const updateSessionData = onCall(callableHttp, async (request) => {
 
 	await updateSession(sessionId as string, updateData);
 	return { success: true };
+});
+
+// ─── Save Prospect Upload (parsed CSV / XLSX prospect list) ─────────────────
+
+export const saveProspectUpload = onCall(callableHttp, async (request) => {
+	if (!request.auth) {
+		throw new HttpsError("unauthenticated", "Sign in required.");
+	}
+
+	const parsed = prospectUploadSchema.safeParse(request.data?.upload);
+	if (!parsed.success) {
+		throw new HttpsError("invalid-argument", "Invalid upload: " + parsed.error.message);
+	}
+
+	const upload = parsed.data;
+	if (upload.rows.length === 0) {
+		throw new HttpsError("invalid-argument", "The uploaded file has no usable rows.");
+	}
+
+	try {
+		const uploadId = await saveProspectUploadDoc(request.auth.uid, {
+			fileName: upload.fileName,
+			matchedHeaders: upload.matchedHeaders,
+			matchedFields: upload.matchedFields,
+			rows: upload.rows,
+			rowCount: upload.rows.length,
+		});
+		return { uploadId };
+	} catch (err) {
+		console.error("saveProspectUpload failed:", err);
+		throw new HttpsError(
+			"internal",
+			err instanceof Error ? err.message : "Failed to save the uploaded list.",
+		);
+	}
 });
 
 // ─── Delete Session ─────────────────────────────────────────────────────────

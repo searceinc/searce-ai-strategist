@@ -49,6 +49,7 @@ type LegacyShape = Partial<GenerationInput> & {
 	targetPersonaFunction?: string;
 	targetPersonaSubFunction?: string;
 	notes?: string;
+	sequenceCount?: number;
 };
 
 export function migrateLegacyInput(raw: LegacyShape): GenerationInput {
@@ -74,6 +75,9 @@ export function migrateLegacyInput(raw: LegacyShape): GenerationInput {
 
 	const instructions = (raw as { instructions?: string }).instructions ?? raw.notes ?? "";
 	const myNotes = (raw as { myNotes?: string }).myNotes ?? "";
+	const rawSeq = raw.sequenceCount;
+	const sequenceCount: GenerationInput["sequenceCount"] =
+		rawSeq === 2 || rawSeq === 3 || rawSeq === 4 || rawSeq === 5 ? rawSeq : 1;
 
 	return {
 		targetCompany: raw.targetCompany ?? "",
@@ -94,6 +98,7 @@ export function migrateLegacyInput(raw: LegacyShape): GenerationInput {
 		nurtureTemplate: raw.nurtureTemplate ?? "1",
 		emailSequenceLength: raw.emailSequenceLength ?? 5,
 		linkedinInmailVariation: raw.linkedinInmailVariation ?? "1",
+		sequenceCount,
 		intelligenceFeedFocus: raw.intelligenceFeedFocus ?? "",
 	};
 }

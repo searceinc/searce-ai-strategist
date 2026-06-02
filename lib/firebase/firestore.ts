@@ -2,6 +2,7 @@
 
 import { httpsCallable } from "firebase/functions";
 import { functions } from "./config";
+import type { ParsedProspectUpload } from "@/lib/prospect-upload";
 import type {
 	GenerateContentRequest,
 	GenerateContentResponse,
@@ -41,6 +42,11 @@ const getStrategistSessionFn = httpsCallable<
 	{ session: StrategistSession | null }
 >(functions, "getStrategistSession");
 
+const saveProspectUploadFn = httpsCallable<{ upload: ParsedProspectUpload }, { uploadId: string }>(
+	functions,
+	"saveProspectUpload",
+);
+
 export async function callGenerateContent(
 	input: GenerateContentRequest["input"],
 ): Promise<GenerateContentResponse> {
@@ -61,6 +67,12 @@ export async function callUpdateSession(
 	data: Record<string, unknown>,
 ): Promise<void> {
 	await updateSessionFn({ sessionId, data });
+}
+
+/** Persist a parsed prospect list and return its Firestore document id. */
+export async function callSaveProspectUpload(upload: ParsedProspectUpload): Promise<string> {
+	const result = await saveProspectUploadFn({ upload });
+	return result.data.uploadId;
 }
 
 // ─── Content History (via Cloud Functions + Admin SDK) ────────────────────

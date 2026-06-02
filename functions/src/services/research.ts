@@ -36,25 +36,52 @@ export async function runResearch(
 		input.targetPersonaSubCategory,
 	);
 
+	const isGeneralPov = !input.targetPersonaIndustry || input.targetPersonaIndustry === "GENERAL";
+
+	// When the rep picks a real industry we anchor every query to that taxonomy.
+	// For the General POV we lean on company / website / domain signals so the
+	// research is still focused — without forcing a sub-industry we don't have.
+	const companyNameRaw = input.targetCompany?.trim() ?? "";
+	const companyName = companyNameRaw.length > 0 ? companyNameRaw : "";
+	const domainRaw = input.targetDomain?.trim() ?? "";
+	const domain = domainRaw.replace(/^https?:\/\//i, "").replace(/\/+$/g, "");
+	const generalAnchor =
+		companyName || domain || "modern enterprises across industries (cloud, data, AI adoption)";
+
 	const subIndustryLabel = [labels.subCategory, labels.category].filter(Boolean).join(", ");
-	const taxonomyPhrase = subIndustryLabel
-		? `${subIndustryLabel} (${labels.industry})`
-		: labels.industry;
-	const convergedSeed = sheet.converged[0] ?? "technology adoption";
+	const taxonomyPhrase = isGeneralPov
+		? generalAnchor
+		: subIndustryLabel
+			? `${subIndustryLabel} (${labels.industry})`
+			: labels.industry;
+	const convergedSeed =
+		sheet.converged[0] ?? (isGeneralPov ? "digital transformation" : "technology adoption");
 	const detailedSeed = sheet.detailed[0] ?? "";
 
 	const searchPromises: Promise<Awaited<ReturnType<typeof tavilySearch>> | null>[] = [];
 
-	// ── Search 1: Company news (named account) OR industry news pulse (no company) ──
-	if (input.targetCompany?.trim()) {
+	// ── Search 1: Company news (named account) OR industry / general pulse ──
+	if (companyName) {
 		searchPromises.push(
 			tavilySearch({
-				query: `"${input.targetCompany.trim()}" recent news technology cloud digital transformation`,
+				query: `"${companyName}" recent news technology cloud digital transformation`,
 				apiKey: tavilyKey,
 				searchDepth: "advanced",
 				maxResults: 5,
 				topic: "news",
 				days: 30,
+			}).catch(() => null),
+		);
+	} else if (isGeneralPov && domain) {
+		// General POV with a domain but no display name — search the brand domain.
+		searchPromises.push(
+			tavilySearch({
+				query: `${domain} company news technology cloud AI digital transformation`,
+				apiKey: tavilyKey,
+				searchDepth: "advanced",
+				maxResults: 5,
+				topic: "news",
+				days: 45,
 			}).catch(() => null),
 		);
 	} else {
@@ -70,10 +97,13 @@ export async function runResearch(
 		);
 	}
 
-	// ── Search 2: Industry trends + ROI metrics ──
+	// ── Search 2: Industry / general trends + ROI metrics ──
+	const trendsQuery = isGeneralPov
+		? `${taxonomyPhrase} cloud, data and AI adoption statistics, trends, ROI benchmarks`
+		: `${taxonomyPhrase} cloud and AI adoption statistics, trends, and ROI metrics`;
 	searchPromises.push(
 		tavilySearch({
-			query: `${taxonomyPhrase} cloud and AI adoption statistics, trends, and ROI metrics`,
+			query: trendsQuery,
 			apiKey: tavilyKey,
 			searchDepth: "advanced",
 			maxResults: 5,
@@ -82,10 +112,12 @@ export async function runResearch(
 		}).catch(() => null),
 	);
 
-	// ── Search 3: Sub-category pain points (workbook-grounded) ──
+	// ── Search 3: Pain points (workbook seed when available, generic otherwise) ──
 	const painQuery = detailedSeed
 		? `${taxonomyPhrase} ${convergedSeed} — "${detailedSeed.slice(0, 90)}"`
-		: `${taxonomyPhrase} ${convergedSeed} biggest technology challenges`;
+		: isGeneralPov
+			? `${taxonomyPhrase} biggest technology, data and AI challenges enterprises face today`
+			: `${taxonomyPhrase} ${convergedSeed} biggest technology challenges`;
 	searchPromises.push(
 		tavilySearch({
 			query: painQuery,
@@ -97,10 +129,13 @@ export async function runResearch(
 		}).catch(() => null),
 	);
 
-	// ── Search 4: Searce case studies ──
+	// ── Search 4: Searce case studies (broader scope for general POV) ──
+	const searceQuery = isGeneralPov
+		? `Searce cloud, data, AI, location intelligence case study`
+		: `${taxonomyPhrase} cloud modernization case study`;
 	searchPromises.push(
 		tavilySearch({
-			query: `${taxonomyPhrase} cloud modernization case study`,
+			query: searceQuery,
 			apiKey: tavilyKey,
 			searchDepth: "basic",
 			maxResults: 4,

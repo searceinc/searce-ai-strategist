@@ -116,10 +116,10 @@ export const SEQUENCE_SCHEMA = {
 		emails: {
 			type: "array",
 			items: sequenceEmailSchema,
-			minItems: 3,
+			minItems: 2,
 			maxItems: 6,
 			description:
-				"Exactly the requested number of emails. Each must have a distinct hook and persona detail.",
+				"Exactly the requested number of emails (2–6). Each must have a distinct hook and persona detail.",
 		},
 		strategistNote: {
 			type: "string",

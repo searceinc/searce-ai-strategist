@@ -30,6 +30,7 @@ const SHEET_INDUSTRY_LABELS: Record<string, string> = {
 // ─── Other industries (kept for legacy / outside the workbook) ──────────────
 
 const EXTRA_INDUSTRY_LABELS: Record<string, string> = {
+	GENERAL: "General (any industry)",
 	MISC: "Other Industries",
 };
 

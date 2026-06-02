@@ -1,8 +1,9 @@
 import { CONTENT_FORMATS } from "@/lib/constants";
 import { migrateLegacyInput } from "@/lib/legacy-codes";
-import type { ContentFormat, GenerationInput } from "@/lib/types";
+import type { ContentFormat, GenerationInput, SequenceCount } from "@/lib/types";
 
 const VALID_FORMATS = new Set<ContentFormat>(CONTENT_FORMATS.map((f) => f.value));
+const VALID_SEQUENCE_COUNTS: ReadonlySet<SequenceCount> = new Set<SequenceCount>([1, 2, 3, 4, 5]);
 
 export const DEFAULT_GENERATION_INPUT: GenerationInput = {
 	targetCompany: "",
@@ -23,6 +24,7 @@ export const DEFAULT_GENERATION_INPUT: GenerationInput = {
 	nurtureTemplate: "1",
 	emailSequenceLength: 5,
 	linkedinInmailVariation: "1",
+	sequenceCount: 1,
 	intelligenceFeedFocus: "",
 };
 
@@ -52,6 +54,9 @@ export function normalizeGenerationInput(raw: Partial<GenerationInput>): Generat
 	}
 	if (merged.linkedinInmailVariation !== "1" && merged.linkedinInmailVariation !== "2") {
 		merged.linkedinInmailVariation = "1";
+	}
+	if (!VALID_SEQUENCE_COUNTS.has(merged.sequenceCount)) {
+		merged.sequenceCount = 1;
 	}
 	return merged;
 }

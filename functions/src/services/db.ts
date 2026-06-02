@@ -31,3 +31,19 @@ export async function updateSession(
 			updatedAt: new Date().toISOString(),
 		});
 }
+
+// ─── Prospect uploads ─────────────────────────────────────────────────────────
+
+export async function saveProspectUpload(
+	userId: string,
+	data: Record<string, unknown>,
+): Promise<string> {
+	const now = new Date().toISOString();
+	const ref = await db.collection("prospect_uploads").add({
+		...data,
+		userId,
+		createdAt: now,
+		updatedAt: now,
+	});
+	return ref.id;
+}

@@ -16,6 +16,9 @@ export function buildSystemPrompt(brief: ContentBrief, cloudContext: CloudContex
 	);
 	const angleCTA = getAngleCTA(input.strategicAngle);
 
+	const isGeneralPov = !input.targetPersonaIndustry || input.targetPersonaIndustry === "GENERAL";
+	const isGeneralService = !input.selectedService || input.selectedService === "general";
+
 	const caseStudyRefs =
 		caseStudies.length > 0
 			? caseStudies
@@ -29,10 +32,32 @@ export function buildSystemPrompt(brief: ContentBrief, cloudContext: CloudContex
 	const allowedPractices =
 		sheetPainPoints.relevantPractices.length > 0
 			? sheetPainPoints.relevantPractices.join(", ")
-			: "(use only practices the model can ground in the supplied case studies — never invent capabilities)";
+			: isGeneralService
+				? "Any verified Searce practice that is genuinely a fit — pick from: Applied AI, Data & Analytics, Infrastructure Modernization, Cloud Managed Services, Location Intelligence, Future of Work. Choose the ONE practice the research best supports; never list all of them; never invent capabilities."
+				: "(use only practices the model can ground in the supplied case studies — never invent capabilities)";
 
 	const angleInstruction =
 		ANGLE_INSTRUCTIONS[input.strategicAngle] ?? ANGLE_INSTRUCTIONS.pain_point!;
+
+	const generalPovBlock = isGeneralPov
+		? `
+## GENERAL POV MODE (industry = General)
+- The rep did not lock in a sub-industry / category, so this email is a **general business POV** about the prospect's company.
+- **Anchor the angle on the live research (Tavily news, metrics, pain points) and the company's own context** — do **not** invent a sub-industry label.
+- Lean on industry-agnostic outcomes Searce has actually delivered (cloud, data, AI, location, managed services, future of work) when a verified case fits the prospect's situation.
+- Speak about pain points and ROI in **general business language** (margin, time-to-decision, operational drag, customer experience) rather than vertical jargon.
+- It is OK to write to a "senior leader" if no title is given. Never invent a department.
+`
+		: "";
+
+	const generalServiceBlock = isGeneralService
+		? `
+## GENERAL SERVICE MODE (service = General)
+- The rep did **not** scope to a specific Searce practice. Choose **ONE** practice that the research + the supplied case studies actually justify — and stick with it across the email.
+- Never list multiple practices in one email. Don't bait-and-switch between practices across paragraphs.
+- If no case study clearly maps to a practice, frame Searce as a focused engagement starting point in **plain language** — never a panacea.
+`
+		: "";
 
 	return `## ROLE
 You are a senior B2B field marketer at Searce writing as one human to another. You are NOT a chatbot, NOT a sales assistant, NOT a marketing AI. You write the way a thoughtful colleague would draft a message for a peer — direct, specific, useful.
@@ -57,6 +82,7 @@ ${allowedPractices}
 
 ## VERIFIED CASE STUDIES (only proof you may name)
 ${caseStudyRefs}
+${generalPovBlock}${generalServiceBlock}
 
 ## INLINE LINKING RULES (HARD)
 - ONLY hyperlink Searce case studies. The Markdown link label must be the **exact verified client name** from the list (e.g. \`[Rebel Foods](https://www.searce.com/...)\`). **Never** use generic link labels such as \`[Multiple clients]\`, \`[Several clients]\`, \`[Client]\`, or \`[Case study]\`.
@@ -92,8 +118,8 @@ Fill the \`strategistNote\` field with 2–3 sentences explaining why you picked
 
 ## PERSONALIZATION RULES
 ${input.targetCompany ? `- Reference ${input.targetCompany} 1–2 times max in plain text. Never use \`[Company name]\` when the real name is known.` : `- **No company in TARGET PROFILE:** you **may** use \`[Company name]\` **at most once** in LONG and **at most once** in SHORT **only** if naming the prospect org improves that line (e.g. a specific question). If the email flows better without a company call-out, **omit** the token and stay role / sub-industry specific.`}
-${input.targetPersonaJobTitle ? `- Write directly to a ${input.targetPersonaJobTitle}. Reference the daily reality of that role in this sub-industry, not a generic executive.` : `- No job title was supplied. Write to a senior leader in this sub-industry without inventing a title.`}
-- **Industry wording:** usually write the sector in plain text (${industryName}${categoryName ? `; ${categoryName}` : ""}). Use \`[Industry name]\` **only** when a merge field fits the tone better than spelling the sector again — **at most once** inside LONG and **at most once** inside SHORT, and **skip** it entirely when plain prose is clearer. Never use bracket tokens for "checklist" coverage; the email should read natural if the rep merged nothing.
+${input.targetPersonaJobTitle ? `- Write directly to a ${input.targetPersonaJobTitle}. Reference the daily reality of that role${isGeneralPov ? " in plain business language" : " in this sub-industry"}, not a generic executive.` : `- No job title was supplied. Write to a senior leader${isGeneralPov ? "" : " in this sub-industry"} without inventing a title.`}
+- **Industry wording:** ${isGeneralPov ? `industry is **general** — do **not** force a sub-industry label. Speak in everyday business terms (margin, time-to-decision, customer experience, operational drag). Use \`[Industry name]\` **only** if a single line genuinely benefits from a CRM merge slot; default to plain text or omit entirely.` : `usually write the sector in plain text (${industryName}${categoryName ? `; ${categoryName}` : ""}). Use \`[Industry name]\` **only** when a merge field fits the tone better than spelling the sector again — **at most once** inside LONG and **at most once** inside SHORT, and **skip** it entirely when plain prose is clearer. Never use bracket tokens for "checklist" coverage; the email should read natural if the rep merged nothing.`}
 - Personalization should feel earned, never templated.
 
 ${angleInstruction(industryName, input)}
@@ -109,11 +135,12 @@ DNA: Engineering-led, outcome-obsessed, startup-speed at enterprise scale.
 Cloud emphasis (only if relevant): ${cloudContext.technologies.slice(0, 4).join(", ")}.
 
 ## TARGET PROFILE
-Industry: ${industryName}
-Sub-industry / Category: ${sheetPainPoints.categoryLabel || "—"}
-Sub-Category: ${sheetPainPoints.subCategoryLabel || "—"}
-Title: ${input.targetPersonaJobTitle || `Senior leader in ${sheetPainPoints.categoryLabel || industryName}`}
+Industry: ${isGeneralPov ? "General (no specific sector locked in)" : industryName}
+Sub-industry / Category: ${isGeneralPov ? "—" : sheetPainPoints.categoryLabel || "—"}
+Sub-Category: ${isGeneralPov ? "—" : sheetPainPoints.subCategoryLabel || "—"}
+Title: ${input.targetPersonaJobTitle || `Senior leader${isGeneralPov ? "" : ` in ${sheetPainPoints.categoryLabel || industryName}`}`}
 Region: ${REGION_LABELS[input.region] ?? input.region}${input.targetCompany ? `\nCompany: ${input.targetCompany}` : ""}
+Service in scope: ${isGeneralService ? "General Searce capabilities — pick the ONE practice the research best supports" : (input.selectedService?.replace(/_/g, " ") ?? "Not specified")}
 
 ## URL RULES
 - Searce case study URLs follow https://www.searce.com/archive/cs-[ID]-detail
@@ -152,11 +179,20 @@ export function buildContentPrompt(brief: ContentBrief, cloudContext: CloudConte
 	);
 	const formatInstructions = buildFormatInstructions(input);
 
+	const isGeneralPov = !input.targetPersonaIndustry || input.targetPersonaIndustry === "GENERAL";
+	const isGeneralService = !input.selectedService || input.selectedService === "general";
+
 	const feedFocus = input.intelligenceFeedFocus?.trim() ?? "";
 
+	const industryContextLine =
+		research.industryTrends[0] ??
+		(isGeneralPov
+			? "Enterprises across sectors continue to invest in cloud, data and AI to compress decision time and operating cost."
+			: `${industryName} sector showing strong cloud adoption trends.`);
+
 	let prompt = `## RESEARCH INSIGHTS (Live Tavily Data)
-${research.companyContext ? `News / signal summary: ${research.companyContext}` : "News / signal summary: none — lean on industry, sub-industry and role context."}
-Industry Context: ${research.industryTrends[0] ?? `${industryName} sector showing strong cloud adoption trends.`}
+${research.companyContext ? `News / signal summary: ${research.companyContext}` : "News / signal summary: none — lean on company / domain context plus live research."}
+${isGeneralPov ? "Industry Context (general POV)" : "Industry Context"}: ${industryContextLine}
 `;
 
 	if (feedFocus) {
@@ -202,15 +238,15 @@ Industry Context: ${research.industryTrends[0] ?? `${industryName} sector showin
 
 	prompt += `
 ## TARGET PROFILE
-${input.targetCompany ? `- Company: ${input.targetCompany}` : "- Company: Not provided (write to the sub-industry and role)"}
+${input.targetCompany ? `- Company: ${input.targetCompany}` : `- Company: Not provided (${isGeneralPov ? "write to the role using live research + company domain" : "write to the sub-industry and role"})`}
 ${input.targetDomain ? `- Domain: ${input.targetDomain}` : ""}
 ${input.targetLinkedInUrl ? `- LinkedIn: ${input.targetLinkedInUrl}` : ""}
-- Industry: ${industryName} (${input.targetPersonaIndustry})
-- Sub-industry / Category: ${categoryName || "—"}
-- Sub-Category: ${subCategoryName || "—"}
+- Industry: ${isGeneralPov ? "General POV (any industry; lean on live research instead of a sub-industry label)" : `${industryName} (${input.targetPersonaIndustry})`}
+- Sub-industry / Category: ${isGeneralPov ? "—" : categoryName || "—"}
+- Sub-Category: ${isGeneralPov ? "—" : subCategoryName || "—"}
 - Job Title: ${input.targetPersonaJobTitle || "Senior leader (generic)"}
 - Region: ${REGION_LABELS[input.region] ?? input.region}
-- Searce Service in scope: ${input.selectedService?.replace(/_/g, " ") ?? "Not specified"}
+- Searce Service in scope: ${isGeneralService ? "General — pick ONE practice that the research + verified case studies justify" : (input.selectedService?.replace(/_/g, " ") ?? "Not specified")}
 - Cloud Ecosystem: ${input.cloudEcosystem.toUpperCase()} (${cloudContext.partnerStatus})
 - Strategic Angle: ${input.strategicAngle.replace(/_/g, " ")}
 `;
@@ -289,17 +325,22 @@ If ANY check fails, REWRITE the response field BEFORE returning.`;
 
 type AngleBuilder = (industryName: string, input: ContentBrief["input"]) => string;
 
+function sectorPhrase(industryName: string, input: ContentBrief["input"]): string {
+	const isGeneralPov = !input.targetPersonaIndustry || input.targetPersonaIndustry === "GENERAL";
+	return isGeneralPov ? "their business" : industryName;
+}
+
 const ANGLE_INSTRUCTIONS: Record<string, AngleBuilder> = {
 	pain_point: (industryName, input) => `
 ## STRATEGIC ANGLE: PAIN POINT FOCUS — Empathetic Provocateur
-- Open with a hyper-specific pain a ${input.targetPersonaJobTitle || "senior leader"} in ${industryName} ${INDUSTRY_LABELS[input.targetPersonaIndustry] ? "" : ""}faces this quarter.
+- Open with a hyper-specific pain a ${input.targetPersonaJobTitle || "senior leader"} in ${sectorPhrase(industryName, input)} ${INDUSTRY_LABELS[input.targetPersonaIndustry] ? "" : ""}faces this quarter.
 - Use phrasing the prospect's peers would actually use in private. No corporate language.
 - Quantify the cost of the status quo before introducing any Searce capability.
 - Frame Searce only as a focused starting point, never a panacea.`,
 
 	roi_metrics: (industryName, input) => `
 ## STRATEGIC ANGLE: ROI / METRICS FOCUS — Data Storyteller
-- Lead with one specific number that matters to a ${input.targetPersonaJobTitle || "leader"} in ${industryName} — paraphrase from live research in **plain prose** (no hyperlink; the rep opens the source in the Intelligence Feed).
+- Lead with one specific number that matters to a ${input.targetPersonaJobTitle || "leader"} in ${sectorPhrase(industryName, input)} — paraphrase from live research in **plain prose** (no hyperlink; the rep opens the source in the Intelligence Feed).
 - Build a quick "math of inaction" so they feel quarterly cost of waiting.
 - Add 1–2 more data points the same way — never as external Markdown links.
 - Close on a small commitment that proves a single number, not a giant ROI promise.`,
@@ -311,10 +352,16 @@ const ANGLE_INSTRUCTIONS: Record<string, AngleBuilder> = {
 - Use real before/after numbers from the case — never invent them.
 - Close by drawing a parallel to the reader's situation, not a generic pitch.`,
 
-	direct_pitch: (industryName, input) => `
+	direct_pitch: (industryName, input) => {
+		const isGeneralService = !input.selectedService || input.selectedService === "general";
+		const serviceLabel = isGeneralService
+			? "the single Searce practice the live research best supports"
+			: (input.selectedService?.replace(/_/g, " ") ?? "starting point");
+		return `
 ## STRATEGIC ANGLE: DIRECT PITCH FOCUS — Confident Authority
-- Skip preamble. Go straight to the ${input.selectedService?.replace(/_/g, " ") ?? "starting point"} for ${industryName}.
-- Be specific: the service in scope, a realistic timeline, and the kind of impact a ${input.targetPersonaJobTitle || "leader"} would care about.
+- Skip preamble. Go straight to ${serviceLabel} for ${sectorPhrase(industryName, input)}.
+- Be specific: the practice in scope, a realistic timeline, and the kind of impact a ${input.targetPersonaJobTitle || "leader"} would care about.
 - One sentence of "we've done this before" with an inline anchor. Don't oversell.
-- Dead-simple CTA. One action.`,
+- Dead-simple CTA. One action.`;
+	},
 };
