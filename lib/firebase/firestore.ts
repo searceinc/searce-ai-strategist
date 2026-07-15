@@ -47,6 +47,11 @@ const saveProspectUploadFn = httpsCallable<{ upload: ParsedProspectUpload }, { u
 	"saveProspectUpload",
 );
 
+const pushToHubspotDraftsFn = httpsCallable<
+	{ touches: { subject: string; body: string }[]; targetCompany: string; format: string },
+	{ created: { id: string; url: string }[] }
+>(functions, "pushToHubspotDrafts");
+
 export async function callGenerateContent(
 	input: GenerateContentRequest["input"],
 ): Promise<GenerateContentResponse> {
@@ -73,6 +78,16 @@ export async function callUpdateSession(
 export async function callSaveProspectUpload(upload: ParsedProspectUpload): Promise<string> {
 	const result = await saveProspectUploadFn({ upload });
 	return result.data.uploadId;
+}
+
+/** Creates one unpublished HubSpot draft email per touch. Rep-triggered only. */
+export async function pushToHubspotDrafts(payload: {
+	touches: { subject: string; body: string }[];
+	targetCompany: string;
+	format: string;
+}): Promise<{ created: { id: string; url: string }[] }> {
+	const result = await pushToHubspotDraftsFn(payload);
+	return result.data;
 }
 
 // ─── Content History (via Cloud Functions + Admin SDK) ────────────────────

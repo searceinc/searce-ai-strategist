@@ -9,9 +9,12 @@
 		"lint": "eslint",
 		"prepare": "husky",
 		"format": "prettier --write .",
-		"format:check": "prettier --check ."
+		"format:check": "prettier --check .",
+		"build:referenceable-stories": "node scripts/build-referenceable-stories.mjs",
+		"extract:referenceable-stories": "node scripts/extract-referenceable-from-pdf.mjs"
 	},
 	"dependencies": {
+		"@anthropic-ai/sdk": "^0.101.0",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"firebase": "^12.11.0",

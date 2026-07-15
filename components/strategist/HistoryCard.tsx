@@ -58,6 +58,12 @@ export default function HistoryCard({ session, onOpen, onToggleFavorite }: Histo
 				</div>
 
 				<div className="flex flex-wrap gap-1.5">
+					<Badge
+						variant={session.mode === "persona" ? "default" : "secondary"}
+						className="text-xs capitalize"
+					>
+						{session.mode === "persona" ? "Persona" : "Account"}
+					</Badge>
 					<Badge variant="secondary" className="text-xs capitalize">
 						{formatLabel}
 					</Badge>

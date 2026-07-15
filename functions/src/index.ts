@@ -1,13 +1,18 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as z from "zod";
-import { tavilyApiKey, geminiApiKey, db } from "./config.js";
+import { tavilyApiKey, geminiApiKey, hubspotAccessToken, db } from "./config.js";
 import { orchestrateGeneration } from "./services/content.js";
 import {
 	saveSession,
 	updateSession,
 	saveProspectUpload as saveProspectUploadDoc,
 } from "./services/db.js";
-import { generationInputSchema, prospectUploadSchema } from "./schema.js";
+import { createDraftMarketingEmails, humanizeEmailLocalPart } from "./hubspot/marketing-email.js";
+import {
+	generationInputSchema,
+	prospectUploadSchema,
+	pushToHubspotDraftsSchema,
+} from "./schema.js";
 import { docToSessionSummary, serializeSessionDocument } from "./session-read.js";
 
 /**
@@ -328,4 +333,45 @@ export const deleteSessionData = onCall(callableHttp, async (request) => {
 
 	await docRef.delete();
 	return { success: true };
+});
+
+// ─── Push to HubSpot (Marketing Email drafts) ───────────────────────────────
+// Manual, rep-triggered only — never called from generateContent/regenerateContent.
+// Creates one unpublished draft per touch; the rep assigns a contact and sends
+// from inside HubSpot.
+
+export const pushToHubspotDrafts = onCall(callableHttp, async (request) => {
+	if (!request.auth) {
+		throw new HttpsError("unauthenticated", "Sign in required.");
+	}
+	if (!hubspotAccessToken) {
+		throw new HttpsError("failed-precondition", "HubSpot is not configured.");
+	}
+
+	const parsed = pushToHubspotDraftsSchema.safeParse(request.data);
+	if (!parsed.success) {
+		throw new HttpsError("invalid-argument", "Invalid input: " + parsed.error.message);
+	}
+	const { touches, targetCompany, format } = parsed.data;
+
+	const repEmail = request.auth.token.email;
+	const repName = request.auth.token.name ?? humanizeEmailLocalPart(repEmail);
+
+	try {
+		const created = await createDraftMarketingEmails(
+			touches,
+			targetCompany,
+			format,
+			repName,
+			repEmail,
+			hubspotAccessToken,
+		);
+		return { created };
+	} catch (err) {
+		console.error("pushToHubspotDrafts failed:", err);
+		throw new HttpsError(
+			"internal",
+			err instanceof Error ? err.message : "Failed to create HubSpot drafts.",
+		);
+	}
 });

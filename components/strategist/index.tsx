@@ -4,3 +4,4 @@ export { default as ResearchPanel } from "./ResearchPanel";
 export { default as OutputEditor } from "./OutputEditor";
 export { default as ContentHistoryList } from "./ContentHistoryList";
 export { default as HistoryCard } from "./HistoryCard";
+export { default as StrategistWorkspace } from "./StrategistWorkspace";

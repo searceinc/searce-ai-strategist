@@ -59,7 +59,7 @@ export const SINGLE_EMAIL_SCHEMA = {
 			minItems: 5,
 			maxItems: 9,
 			description:
-				'Use 5–9 array entries. EACH entry is ONE micro-paragraph: at most 2 sentences (3 only if every sentence is very short). Prefer 1–2 sentences so each block is 1–3 lines on screen — use a NEW array item for each beat instead of stacking sentences in one string. One entry may be a 2–4 line bullet block using lines starting with \'•\'. Total ≤ ~180 words (≤ ~130 InMail). Use **bold** for scan-friendly emphasis (4–7 short spans): metric+noun phrases, 2–4 word pain hooks, proper nouns, and **Label:** prefixes on bullet lines where helpful — never bold glue words alone ("before", "after", "the", "we"). Spread bold across blocks. Exactly ONE Searce Markdown anchor [VerifiedClientName](searce url) using a real client from the list — never generic labels like [Multiple clients].',
+				"Use 5–9 array entries following the 4T arc (Trigger → Think → Trust → Talk). EACH entry is ONE micro-paragraph: at most 2 sentences (3 only if every sentence is very short). Total ≤ ~180 words (≤ ~130 InMail). BOLD: max 3 spans in LONG (max 2 in InMail) — ONLY hard metrics with a digit OR the verified CLIENT NAME once in Trust beat. Never bold generic phrases (operational complexity, AI-ready data, better decision making). Trust beat: spell CLIENT NAME exactly from VERIFIED CASE STUDIES; never use a title or sentence fragment as the client.",
 		},
 		shortParagraphs: {
 			type: "array",
@@ -67,7 +67,7 @@ export const SINGLE_EMAIL_SCHEMA = {
 			minItems: 4,
 			maxItems: 7,
 			description:
-				"Use 4–7 micro-paragraphs: same rule — one short idea per array entry (1–2 sentences each, rarely 3 if all very short). Split dense paragraphs into more entries. ≤ ~128 words (≤ ~88 InMail). **Bold** 3–5 times: metric+context phrases, pain hooks, proper nouns, optional **Label:** on bullet lines — not glue words alone. One Searce anchor. No generic bracket link labels.",
+				"Use 4–7 micro-paragraphs following the tight 4T arc. ≤ ~128 words (≤ ~88 InMail). BOLD: max 2 spans (1 in InMail) — digit-bearing metrics and/or CLIENT NAME in Trust beat only. No generic phrase bolding. Name ONE verified client exactly as in VERIFIED CASE STUDIES.",
 		},
 		strategistNote: {
 			type: "string",
@@ -97,7 +97,7 @@ const sequenceEmailSchema = {
 			minItems: 5,
 			maxItems: 9,
 			description:
-				"5–9 micro-paragraphs per email: 1–2 sentences per entry (rarely 3 if all short); one '•' bullet block allowed as a single entry. Total ≤ ~170 words (closing ≤ ~102). **Bold** 4–7 spans: keywords, metric+context, bullet labels — never connector words alone. One Searce anchor per email.",
+				"5–9 micro-paragraphs per email, each a full 4T arc. Total ≤ ~170 words (closing ≤ ~102). BOLD: max 2–3 spans — digit metrics and/or CLIENT NAME in Trust beat only. Spell CLIENT NAME exactly from VERIFIED CASE STUDIES per email.",
 		},
 	},
 	required: ["title", "subjects", "paragraphs"],

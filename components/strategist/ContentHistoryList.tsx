@@ -11,6 +11,7 @@ import { useAuthStore } from "@/lib/store/useAuthStore";
 import { useStrategistStore } from "@/lib/store/useStrategistStore";
 import { fetchUserSessions, toggleFavorite, fetchSessionById } from "@/lib/firebase/firestore";
 import { normalizeGenerationInput } from "@/lib/default-generation-input";
+import { cn } from "@/lib/utils";
 import HistoryCard from "./HistoryCard";
 import type { SessionSummary } from "@/lib/types";
 
@@ -20,6 +21,7 @@ export default function ContentHistoryList() {
 	const router = useRouter();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [tab, setTab] = useState<"all" | "favorites">("all");
+	const [modeFilter, setModeFilter] = useState<"all" | "account" | "persona">("all");
 
 	const favorites = useMemo(() => sessions.filter((s) => s.isFavorite), [sessions]);
 
@@ -54,7 +56,9 @@ export default function ContentHistoryList() {
 				const store = useStrategistStore.getState();
 				store.setInput(normalizeGenerationInput(session.input));
 				store.hydrateFromSavedSession(session);
-				router.push("/strategist");
+				router.push(
+					session.input?.mode === "persona" ? "/strategist/persona" : "/strategist",
+				);
 			} catch {
 				toast.error("Failed to open session");
 			}
@@ -76,14 +80,16 @@ export default function ContentHistoryList() {
 	);
 
 	const activeList = tab === "favorites" ? favorites : sessions;
+	const modeFiltered =
+		modeFilter === "all" ? activeList : activeList.filter((s) => s.mode === modeFilter);
 	const filtered = searchQuery
-		? activeList.filter(
+		? modeFiltered.filter(
 				(s) =>
 					s.targetCompany.toLowerCase().includes(searchQuery.toLowerCase()) ||
 					s.targetPersonaJobTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
 					s.region.toLowerCase().includes(searchQuery.toLowerCase()),
 			)
-		: activeList;
+		: modeFiltered;
 
 	return (
 		<div className="space-y-4">
@@ -110,6 +116,24 @@ export default function ContentHistoryList() {
 					value={searchQuery}
 					onChange={(e) => setSearchQuery(e.target.value)}
 				/>
+			</div>
+
+			<div className="flex gap-1.5">
+				{(["all", "account", "persona"] as const).map((m) => (
+					<button
+						key={m}
+						type="button"
+						onClick={() => setModeFilter(m)}
+						className={cn(
+							"cursor-pointer rounded-md border-2 px-3 py-1 text-xs font-medium capitalize transition-colors",
+							modeFilter === m
+								? "border-primary bg-primary/10 text-primary"
+								: "border-border bg-background hover:bg-muted",
+						)}
+					>
+						{m}
+					</button>
+				))}
 			</div>
 
 			<Tabs value={tab} onValueChange={(v) => setTab(v as "all" | "favorites")}>

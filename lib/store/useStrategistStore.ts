@@ -60,6 +60,9 @@ interface StrategistState {
 	setActiveTab: (tab: "config" | "research" | "output") => void;
 	sidebarOpen: boolean;
 	setSidebarOpen: (v: boolean) => void;
+
+	/** Full local reset for starting a new generation from scratch — config fields, prospect upload, generated content, and the Intelligence Feed. Never touches Firestore/HubSpot. */
+	resetAll: () => void;
 }
 
 export const useStrategistStore = create<StrategistState>((set) => ({
@@ -137,4 +140,20 @@ export const useStrategistStore = create<StrategistState>((set) => ({
 	setActiveTab: (tab) => set({ activeTab: tab }),
 	sidebarOpen: true,
 	setSidebarOpen: (v) => set({ sidebarOpen: v }),
+
+	resetAll: () =>
+		set({
+			input: { ...DEFAULT_GENERATION_INPUT },
+			prospectUpload: null,
+			currentSessionId: null,
+			research: null,
+			caseStudyMatches: [],
+			fallbackPath: "none",
+			confidenceScore: 0,
+			generatedContent: "",
+			editedContent: "",
+			transparencyNote: null,
+			generationError: null,
+			activeTab: "config",
+		}),
 }));

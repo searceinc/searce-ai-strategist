@@ -113,14 +113,14 @@ export async function orchestrateGeneration(
 	} = getVerifiedCaseStudies(
 		input.targetPersonaIndustry,
 		input.region,
-		input.targetPersonaCategory,
 		input.cloudEcosystem,
 		input.intelligentFallback,
+		input.selectedService,
 	);
 
 	// ── Early exit: no case studies and fallback disabled ──
 	if (caseStudies.length === 0 && !input.intelligentFallback) {
-		const research = await runResearch(input, tavilyKey);
+		const research = await runResearch(input, tavilyKey, geminiKey);
 		return {
 			research,
 			caseStudyMatches: [],
@@ -142,7 +142,7 @@ export async function orchestrateGeneration(
 			: "benchmark_only";
 
 	// ── Phase 2: Live research (async — Tavily) ──
-	const research = await runResearch(input, tavilyKey);
+	const research = await runResearch(input, tavilyKey, geminiKey);
 
 	// ── Phase 3: Compute confidence ──
 	const confidenceScore = computeConfidence(research, caseStudies, usedFallback);
@@ -229,12 +229,13 @@ async function generateForFormat({
 				apiKey: geminiKey,
 				prompt: userPrompt,
 				systemInstruction: systemPrompt,
-				temperature: 0.35,
+				model: "gemini-3.5-flash",
+				temperature: 0.4,
 				maxOutputTokens: 6144,
 				responseJsonSchema: SEQUENCE_SCHEMA,
 				validate: isSequenceResponse,
 			});
-			return assembleSequence(resp);
+			return assembleSequence(resp, input.selectedFormat);
 		} catch (err) {
 			console.warn("Structured sequence generation failed; falling back to text mode.", err);
 			return textModeWithRetry({
@@ -252,7 +253,8 @@ async function generateForFormat({
 				apiKey: geminiKey,
 				prompt: userPrompt,
 				systemInstruction: systemPrompt,
-				temperature: 0.35,
+				model: "gemini-3.5-flash",
+				temperature: 0.4,
 				maxOutputTokens: 4096,
 				responseJsonSchema: SINGLE_EMAIL_SCHEMA,
 				validate: isSingleEmailResponse,
@@ -310,29 +312,33 @@ SUBJECT OPTION C: <subject>
 PREVIEW C: <preview>
 (Optional SUBJECT OPTION D / PREVIEW D)
 
+Follow the 4T arc in BOTH versions: Trigger (observant detail) → Think (neutral pain question) → Trust (ONE verified client, named in PLAIN TEXT, how it works + metric) → Talk (soft interest-check, never a meeting ask).
+
 ---
 ===VERSION:LONG===
 Hi [FirstName],
 
-<micro-paragraph 1 — 1–2 sentences>
+<Trigger — 1–2 sentences, an observant detail about their business>
 
-<micro-paragraph 2 — 1–2 sentences>
+<Think — 1–2 sentences, a neutral low-pressure pain question>
 
-<micro-paragraph 3 — optional bullets using "•" on separate lines in ONE block>
+<optional bullets using "•" on separate lines in ONE block (tension/contrast)>
 
-<more micro-paragraphs as needed — aim 5–9 short blocks total, each 1–3 lines>
+<Trust — name ONE verified client in plain text; how it works + the real metric>
 
-<final micro-paragraph: peer-style low-friction ask>
+<Talk — a soft, conversational CTA (no demo/meeting ask)>
 
 [Your Name] | Searce
 ===VERSION:SHORT===
 Hi [FirstName],
 
-<several short blocks, 4–7 total — 1–2 sentences each>
+<Trigger block — 1–2 sentences>
 
-<one block with Searce Markdown anchor>
+<Think block — neutral pain question>
 
-<light CTA block>
+<Trust block — ONE verified client named in plain text + the metric>
+
+<Talk block — light interest-check>
 
 [Your Name] | Searce
 
@@ -340,8 +346,8 @@ Hi [FirstName],
 STRATEGIST NOTE:
 <2–3 sentences>
 
-Rules: only Searce-domain Markdown anchors in the body, no external links. No "Hi [FirstName]" inside body paragraphs (it's already on its own line). No "[Your Name] | Searce" inside body paragraphs.
-- LONG: many short paragraphs (5–9 blocks), ~180 words max (~130 InMail). SHORT: 4–7 blocks, ~128 words (~88 InMail). **Bold** 4–7 times in LONG and 3–5 in SHORT: pair stats with nouns, stress 2–4 word pain phrases, use **Label:** on comparison bullets when it helps — never bold glue words alone (before, after, when, the, we, …). Square-bracket CRM tokens ONLY: [FirstName], [LastName], [Company name], [Industry name] — use **only when tone warrants** (see system prompt); never pad; no other [bracket] fillers.
+Rules: NO hyperlinks of any kind in the body — name the verified CLIENT NAME exactly as in VERIFIED CASE STUDIES (never a title or sentence fragment). No "Hi [FirstName]" inside body paragraphs (it's already on its own line). No "[Your Name] | Searce" inside body paragraphs.
+- LONG: many short paragraphs (5–9 blocks), ~180 words max (~130 InMail). SHORT: 4–7 blocks, ~128 words (~88 InMail). **Bold** at most 2–3 times in LONG (1–2 in SHORT / InMail): ONLY metrics with a digit and/or the client company name once in Trust beat — never bold generic phrases like operational complexity, AI-ready data, or better decision making. Square-bracket CRM tokens ONLY: [FirstName], [LastName], [Company name], [Industry name].
 `;
 
 function textModeOverrideForSequence(count: number): string {
@@ -359,13 +365,13 @@ PREVIEW C: <preview>
 
 Hi [FirstName],
 
-<micro-paragraph 1 — 1–2 sentences>
+<Trigger — an observant detail; rotate the angle each touch>
 
-<micro-paragraph 2 — 1–2 sentences>
+<Think — a neutral low-pressure pain question>
 
-<more micro-paragraphs as needed — aim 5–9 short blocks total, each 1–3 lines>
+<Trust — ONE verified client named in PLAIN TEXT; how it works + metric>
 
-<final micro-paragraph: peer-style low-friction ask>
+<Talk — a soft, peer-style interest check (no meeting ask)>
 
 [Your Name] | Searce`);
 	}
@@ -379,7 +385,7 @@ ${blocks.join("\n\n---\n\n")}
 STRATEGIST NOTE:
 <2–3 sentences explaining the angle of the sequence + the specific signal that drove it>
 
-Rules: only Searce-domain Markdown anchors in any email body, no external links. Per email word total ≤ ~170 (closing email ≤ ~102). **Bold** 4–7 short spans per email — metrics + their nouns, 2–4 word pain phrases, **Label:** lines in bullet blocks; never bold glue words alone.
+Rules: each email is a full 4T arc (Trigger → Think → Trust → Talk). NO hyperlinks anywhere — spell CLIENT NAME exactly from VERIFIED CASE STUDIES. Per email ≤ ~170 words (closing ≤ ~102). **Bold** max 2–3 spans per email — digit metrics and/or client name in Trust beat only; no generic phrase bolding.
 `;
 }
 
@@ -402,9 +408,15 @@ async function textModeWithRetry({
 	let override: string;
 	if (isConvoAd) {
 		// Conversation Ad: the format prompt is self-describing for both
-		// single + sequence variants. Skip the LONG/SHORT marker override
-		// entirely so the model doesn't get conflicting instructions.
-		override = "";
+		// single + sequence variants, so skip the LONG/SHORT marker override —
+		// but still guard against JSON leakage (verified 2026-07-07: without
+		// any override at all, Gemini sometimes returns a raw JSON object
+		// matching the single-email schema instead of the plain-text
+		// Conversation Ad structure described in the format prompt).
+		override = `
+## OVERRIDE — TEXT MODE
+This run does NOT use a JSON schema. DO NOT return JSON, a code block, or any object/array syntax. Output PLAIN TEXT only, following the Conversation Ad structure already described above (headline, value prop, MESSAGE blocks with BUTTON options, STRATEGIST NOTE). Anything that looks like a JSON object or array is a hard failure.
+`;
 	} else if (wantsSequenceOverride) {
 		override = textModeOverrideForSequence(desiredSequenceCount);
 	} else {
@@ -412,12 +424,22 @@ async function textModeWithRetry({
 	}
 	const textPrompt = override ? `${userPrompt}\n${override}` : userPrompt;
 
+	// Verified empirically (2026-07-07): with thinkingLevel MEDIUM on
+	// gemini-3.5-flash, "thinking" tokens count against maxOutputTokens and
+	// can consume ~2000 tokens on their own — a flat 2048 cap hit MAX_TOKENS
+	// after ~80 tokens of real output for Conversation Ad. Every call through
+	// this function now gets the same headroom as the structured single-email
+	// path (4096) or sequence path (6144) to leave room for both thinking and
+	// the actual content.
+	const maxOutputTokens = wantsSequenceOverride ? 6144 : 4096;
+
 	let generatedContent = await generateWithGemini({
 		apiKey: geminiKey,
 		prompt: textPrompt,
 		systemInstruction: systemPrompt,
+		model: "gemini-3.5-flash",
 		temperature: 0.4,
-		maxOutputTokens: 4096,
+		maxOutputTokens,
 	});
 
 	const compliance = checkCompliance(generatedContent, input);
@@ -428,8 +450,9 @@ async function textModeWithRetry({
 				apiKey: geminiKey,
 				prompt: `${textPrompt}\n\n## PREVIOUS DRAFT (FOR REFERENCE — DO NOT REPEAT IT)\n${generatedContent}\n${corrective}`,
 				systemInstruction: systemPrompt,
+				model: "gemini-3.5-flash",
 				temperature: 0.25,
-				maxOutputTokens: 4096,
+				maxOutputTokens,
 			});
 			const recheck = checkCompliance(rewritten, input);
 			if (recheck.reasons.length <= compliance.reasons.length) {

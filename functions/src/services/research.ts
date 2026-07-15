@@ -1,4 +1,6 @@
+import { ThinkingLevel } from "@google/genai";
 import { tavilySearch } from "../tavily/client.js";
+import { generateStructuredWithGemini } from "../gemini/client.js";
 import { resolveTaxonomyLabels, getSheetPainPoints } from "../data/pain-points.js";
 import type {
 	ExternalSourceItem,
@@ -6,9 +8,185 @@ import type {
 	MetricItem,
 	NewsItem,
 	PainPointItem,
+	PersonaSignalItem,
 	ResearchSnapshot,
 	TavilyResult,
 } from "../types.js";
+
+/**
+ * Schema for the research-summarization pass — takes raw Tavily source
+ * content plus known company/industry context and extracts only the facts
+ * genuinely relevant to that context, instead of a fixed keyword/regex
+ * filter over blindly truncated text.
+ */
+const RESEARCH_SUMMARY_SCHEMA = {
+	type: "object",
+	properties: {
+		companyContext: {
+			type: "string",
+			description:
+				"1-2 sentence grounding summary of the company/industry's current situation, based only on the sources given. Empty string if nothing relevant found.",
+		},
+		industryTrends: {
+			type: "array",
+			items: { type: "string" },
+			maxItems: 6,
+			description:
+				"Up to 6 short, single-sentence industry/technology trend or adoption facts drawn directly from the sources. Paraphrase; do not invent.",
+		},
+		metrics: {
+			type: "array",
+			items: { type: "string" },
+			maxItems: 6,
+			description:
+				"Up to 6 short sentences, each containing a concrete number/percentage/stat drawn directly from the sources.",
+		},
+		painPoints: {
+			type: "array",
+			items: { type: "string" },
+			maxItems: 6,
+			description:
+				"Up to 6 short sentences describing a specific challenge/pain point relevant to the target company/industry, drawn directly from the sources.",
+		},
+	},
+	required: ["companyContext", "industryTrends", "metrics", "painPoints"],
+} as const;
+
+interface ResearchSummary {
+	companyContext: string;
+	industryTrends: string[];
+	metrics: string[];
+	painPoints: string[];
+}
+
+function isResearchSummary(value: unknown): value is ResearchSummary {
+	if (!value || typeof value !== "object") return false;
+	const v = value as Record<string, unknown>;
+	return (
+		typeof v.companyContext === "string" &&
+		Array.isArray(v.industryTrends) &&
+		Array.isArray(v.metrics) &&
+		Array.isArray(v.painPoints)
+	);
+}
+
+/**
+ * Relevance-filter raw Tavily results with a cheap, low-thinking Gemini pass
+ * instead of a hand-written keyword list + regex. Returns null on any
+ * failure so callers can fall back to the naive extraction.
+ */
+async function summarizeResearch(
+	sources: TavilyResult[],
+	tavilyAnswers: string[],
+	context: { companyName: string; taxonomyPhrase: string },
+	geminiKey: string,
+): Promise<ResearchSummary | null> {
+	if (sources.length === 0 && tavilyAnswers.length === 0) return null;
+
+	const corpus = sources
+		.slice(0, 15)
+		.map((s, i) => `[${i + 1}] ${s.title}\n${(s.content ?? "").slice(0, 600)}`)
+		.join("\n\n");
+	const answerBlock = tavilyAnswers.length
+		? `Search-engine summaries:\n${tavilyAnswers.map((a) => `- ${a}`).join("\n")}\n\n`
+		: "";
+
+	const prompt = `You are extracting sales-research facts for outbound email personalization.
+
+Target: ${context.companyName || context.taxonomyPhrase}
+Industry/segment context: ${context.taxonomyPhrase}
+
+${answerBlock}Raw sources:
+${corpus}
+
+Extract ONLY facts that are actually present in the sources above and genuinely relevant to this specific target and industry context. Do not invent, generalize, or pad — if a category has no genuinely relevant facts, return an empty array for it.`;
+
+	try {
+		const summary = await generateStructuredWithGemini<ResearchSummary>({
+			apiKey: geminiKey,
+			prompt,
+			model: "gemini-3.5-flash",
+			temperature: 0.2,
+			thinkingLevel: ThinkingLevel.LOW,
+			maxOutputTokens: 1024,
+			responseJsonSchema: RESEARCH_SUMMARY_SCHEMA,
+			validate: isResearchSummary,
+		});
+		return summary;
+	} catch (err) {
+		console.warn("Research summarization failed; falling back to naive extraction.", err);
+		return null;
+	}
+}
+
+/** Persona-level: bio + triggers extracted from raw person-specific Tavily content. */
+const PERSONA_SUMMARY_SCHEMA = {
+	type: "object",
+	properties: {
+		bio: {
+			type: "string",
+			description:
+				"1-3 sentence bio/career summary of this specific person, based only on the sources given. Empty string if nothing relevant found — do not invent career facts.",
+		},
+		triggers: {
+			type: "array",
+			items: { type: "string" },
+			maxItems: 6,
+			description:
+				"Up to 6 short sentences, each a specific, citable fact about THIS person (a quote, stated priority, career move, conference appearance) that could anchor a personalized email opening. Grounded only in the sources given.",
+		},
+	},
+	required: ["bio", "triggers"],
+} as const;
+
+interface PersonaSummary {
+	bio: string;
+	triggers: string[];
+}
+
+function isPersonaSummary(value: unknown): value is PersonaSummary {
+	if (!value || typeof value !== "object") return false;
+	const v = value as Record<string, unknown>;
+	return typeof v.bio === "string" && Array.isArray(v.triggers);
+}
+
+async function summarizePersonaResearch(
+	sources: TavilyResult[],
+	personName: string,
+	geminiKey: string,
+): Promise<PersonaSummary | null> {
+	if (sources.length === 0) return null;
+
+	const corpus = sources
+		.slice(0, 10)
+		.map((s, i) => `[${i + 1}] ${s.title}\n${(s.content ?? "").slice(0, 600)}`)
+		.join("\n\n");
+
+	const prompt = `You are extracting person-specific facts for a personalized sales email to one named individual.
+
+Person: ${personName}
+
+Raw sources (may include unrelated same-name people or generic company pages — ignore anything not clearly about this specific person in this role):
+${corpus}
+
+Extract ONLY facts genuinely about ${personName} specifically. If the sources are mostly noise/unrelated, return an empty bio and empty triggers array rather than guessing.`;
+
+	try {
+		return await generateStructuredWithGemini<PersonaSummary>({
+			apiKey: geminiKey,
+			prompt,
+			model: "gemini-3.5-flash",
+			temperature: 0.2,
+			thinkingLevel: ThinkingLevel.LOW,
+			maxOutputTokens: 1024,
+			responseJsonSchema: PERSONA_SUMMARY_SCHEMA,
+			validate: isPersonaSummary,
+		});
+	} catch (err) {
+		console.warn("Persona summarization failed.", err);
+		return null;
+	}
+}
 
 /**
  * Tavily-powered live research. Four parallel searches:
@@ -24,6 +202,7 @@ import type {
 export async function runResearch(
 	input: GenerationInput,
 	tavilyKey: string,
+	geminiKey: string,
 ): Promise<ResearchSnapshot> {
 	const labels = resolveTaxonomyLabels(
 		input.targetPersonaIndustry,
@@ -137,14 +316,42 @@ export async function runResearch(
 		tavilySearch({
 			query: searceQuery,
 			apiKey: tavilyKey,
-			searchDepth: "basic",
+			searchDepth: "advanced",
 			maxResults: 4,
 			includeDomains: ["searce.com"],
 		}).catch(() => null),
 	);
 
-	const [newsResults, trendResults, painPointResults, searceResults] =
-		await Promise.all(searchPromises);
+	// ── Persona-level only: person-specific searches (run alongside, not ──
+	// mixed into the fixed-position searchPromises above, since they're
+	// conditional and would break the positional destructuring below).
+	const personaName = input.mode === "persona" ? (input.personaName?.trim() ?? "") : "";
+	const personaSearchPromises: Promise<Awaited<ReturnType<typeof tavilySearch>> | null>[] = [];
+	if (personaName) {
+		const personaAnchor = companyName || taxonomyPhrase;
+		personaSearchPromises.push(
+			tavilySearch({
+				query: `"${personaName}" ${personaAnchor} interview OR quote OR keynote OR podcast`,
+				apiKey: tavilyKey,
+				searchDepth: "advanced",
+				maxResults: 5,
+				topic: "general",
+				timeRange: "year",
+			}).catch(() => null),
+			tavilySearch({
+				query: `"${personaName}" LinkedIn OR conference OR whitepaper OR appointed OR promoted`,
+				apiKey: tavilyKey,
+				searchDepth: "advanced",
+				maxResults: 5,
+				topic: "general",
+			}).catch(() => null),
+		);
+	}
+
+	const [
+		[newsResults, trendResults, painPointResults, searceResults],
+		[personaInterviewResults, personaActivityResults],
+	] = await Promise.all([Promise.all(searchPromises), Promise.all(personaSearchPromises)]);
 
 	// ── Extract news with URLs (company-specific OR industry pulse) ──
 	const newsWithUrls: NewsItem[] = [];
@@ -171,11 +378,10 @@ export async function runResearch(
 	// ── Extract industry metrics with URLs ──
 	const metricsWithUrls: MetricItem[] = [];
 	const industryTrends: string[] = [];
+	const metrics: string[] = [];
+	const trendsAnswerText = trendResults?.answer?.substring(0, 300) ?? "";
 
 	if (trendResults?.results?.length) {
-		if (trendResults.answer) {
-			industryTrends.push(trendResults.answer.substring(0, 300));
-		}
 		for (const item of trendResults.results.slice(0, 4)) {
 			metricsWithUrls.push({
 				value: item.content?.substring(0, 200) ?? item.title,
@@ -235,46 +441,108 @@ export async function runResearch(
 		}
 	}
 
-	// ── Extract trend snippets from source content ──
-	const trendKeywords = [
-		"trend",
-		"growth",
-		"adoption",
-		"shift",
-		"transformation",
-		"emerging",
-		"forecast",
-		"prediction",
-		"innovation",
-		"disruption",
-	];
-	for (const source of allSources.slice(0, 10)) {
-		const sentences = source.content.split(/[.!?]+/).filter((s) => s.trim().length > 20);
-		for (const sentence of sentences) {
-			if (trendKeywords.some((kw) => sentence.toLowerCase().includes(kw))) {
-				industryTrends.push(sentence.trim());
-				if (industryTrends.length >= 6) break;
-			}
-		}
-		if (industryTrends.length >= 6) break;
-	}
-
-	// ── Extract metric snippets ──
-	const metrics: string[] = [];
-	const metricPattern = /\d+[\d,.]*\s*(%|percent|x|million|billion|thousand)/gi;
-	for (const source of allSources.slice(0, 10)) {
-		const matches = source.content.match(metricPattern);
-		if (matches) {
-			for (const match of matches) {
-				const context = extractSentence(source.content, match);
-				if (context) metrics.push(context);
-				if (metrics.length >= 6) break;
-			}
-		}
-		if (metrics.length >= 6) break;
-	}
-
 	allSources.sort((a, b) => b.score - a.score);
+
+	// ── Persona-level only: build Public Signals directly from raw Tavily ──
+	// items (deterministic — title/content/url/date straight from the
+	// source, same pattern as metricsWithUrls/painPointsWithUrls) and run
+	// one grounded LLM pass for the narrative bio + citable triggers.
+	const personaRawSources: TavilyResult[] = [];
+	const personaSeenUrls = new Set<string>();
+	for (const item of [
+		...(personaInterviewResults?.results ?? []),
+		...(personaActivityResults?.results ?? []),
+	]) {
+		if (!item.url || personaSeenUrls.has(item.url)) continue;
+		personaSeenUrls.add(item.url);
+		personaRawSources.push(item);
+	}
+
+	const personaSignals: PersonaSignalItem[] = personaRawSources.slice(0, 8).map((item) => ({
+		text: item.content?.substring(0, 220) ?? item.title,
+		source: extractHostname(item.url),
+		sourceUrl: item.url,
+		date: item.published_date,
+	}));
+
+	let personaBio = "";
+	let personaTriggers: string[] = [];
+	if (personaName) {
+		const personaSummary = await summarizePersonaResearch(
+			personaRawSources,
+			personaName,
+			geminiKey,
+		);
+		if (personaSummary) {
+			personaBio = personaSummary.bio;
+			personaTriggers = personaSummary.triggers;
+		}
+	}
+
+	// ── Relevance-filter raw source content with a cheap Gemini pass, ──
+	// grounded in the actual content instead of a fixed keyword list/regex.
+	// Falls back to the naive extraction below only if the call fails.
+	const tavilyAnswers = [
+		newsResults?.answer,
+		trendResults?.answer,
+		painPointResults?.answer,
+	].filter((a): a is string => Boolean(a));
+	const summary = await summarizeResearch(
+		allSources,
+		tavilyAnswers,
+		{ companyName, taxonomyPhrase },
+		geminiKey,
+	);
+
+	if (summary) {
+		if (summary.companyContext) companyContext = summary.companyContext;
+		industryTrends.push(...summary.industryTrends);
+		metrics.push(...summary.metrics);
+		if (summary.painPoints.length) {
+			painPoints.length = 0;
+			painPoints.push(...summary.painPoints);
+		}
+	} else {
+		if (trendsAnswerText) industryTrends.push(trendsAnswerText);
+
+		// ── Fallback: keyword-based trend extraction ──
+		const trendKeywords = [
+			"trend",
+			"growth",
+			"adoption",
+			"shift",
+			"transformation",
+			"emerging",
+			"forecast",
+			"prediction",
+			"innovation",
+			"disruption",
+		];
+		for (const source of allSources.slice(0, 10)) {
+			const sentences = source.content.split(/[.!?]+/).filter((s) => s.trim().length > 20);
+			for (const sentence of sentences) {
+				if (trendKeywords.some((kw) => sentence.toLowerCase().includes(kw))) {
+					industryTrends.push(sentence.trim());
+					if (industryTrends.length >= 6) break;
+				}
+			}
+			if (industryTrends.length >= 6) break;
+		}
+
+		// ── Fallback: regex-based metric extraction ──
+		const metricPattern = /\d+[\d,.]*\s*(%|percent|x|million|billion|thousand)/gi;
+		for (const source of allSources.slice(0, 10)) {
+			const matches = source.content.match(metricPattern);
+			if (matches) {
+				for (const match of matches) {
+					const context = extractSentence(source.content, match);
+					if (context) metrics.push(context);
+					if (metrics.length >= 6) break;
+				}
+			}
+			if (metrics.length >= 6) break;
+		}
+	}
 
 	const externalSources = buildExternalSources(
 		newsWithUrls,
@@ -294,6 +562,9 @@ export async function runResearch(
 		metricsWithUrls,
 		painPointsWithUrls,
 		externalSources,
+		personaBio,
+		personaSignals,
+		personaTriggers,
 		isLiveData: true,
 		timestamp: new Date().toISOString(),
 	};

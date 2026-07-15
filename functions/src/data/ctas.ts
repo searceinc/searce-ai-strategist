@@ -27,7 +27,7 @@ const ANGLE_CTAS: Record<string, AngleCTA> = {
 		secondary: "Can drop a short case write-up if helpful.",
 	},
 	direct_pitch: {
-		primary: "30-minute working session next week?",
+		primary: "Worth a quick look to see if it maps to your setup?",
 		secondary: "Or I can send a one-pager first, your call.",
 	},
 };

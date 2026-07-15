@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
 let cachedClient: GoogleGenAI | null = null;
 
@@ -16,15 +16,17 @@ interface GenerateOptions {
 	model?: string;
 	temperature?: number;
 	maxOutputTokens?: number;
+	thinkingLevel?: ThinkingLevel;
 }
 
 export async function generateWithGemini({
 	apiKey,
 	prompt,
 	systemInstruction,
-	model = "gemini-2.5-flash",
+	model = "gemini-3.5-flash",
 	temperature = 0.4,
 	maxOutputTokens = 2048,
+	thinkingLevel = ThinkingLevel.MEDIUM,
 }: GenerateOptions): Promise<string> {
 	const client = getClient(apiKey);
 
@@ -35,6 +37,7 @@ export async function generateWithGemini({
 			systemInstruction,
 			temperature,
 			maxOutputTokens,
+			thinkingConfig: { thinkingLevel },
 		},
 	});
 
@@ -69,9 +72,10 @@ export async function generateStructuredWithGemini<T = unknown>({
 	apiKey,
 	prompt,
 	systemInstruction,
-	model = "gemini-2.5-flash",
-	temperature = 0.35,
+	model = "gemini-3.5-flash",
+	temperature = 0.4,
 	maxOutputTokens = 2048,
+	thinkingLevel = ThinkingLevel.MEDIUM,
 	responseJsonSchema,
 	validate,
 }: StructuredGenerateOptions<T>): Promise<T> {
@@ -84,6 +88,7 @@ export async function generateStructuredWithGemini<T = unknown>({
 			systemInstruction,
 			temperature,
 			maxOutputTokens,
+			thinkingConfig: { thinkingLevel },
 			responseMimeType: "application/json",
 			// Use the JSON Schema field. Cast via `as never` to bypass the
 			// SDK's deep generic typing; the runtime accepts a plain JSON

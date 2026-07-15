@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PenLine, History, Star, PanelLeftClose, PanelLeft } from "lucide-react";
+import { PenLine, UserRound, History, Star, PanelLeftClose, PanelLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useStrategistStore } from "@/lib/store/useStrategistStore";
 
 const NAV_ITEMS = [
-	{ href: "/strategist", label: "Content Generator", icon: PenLine },
+	{ href: "/strategist", label: "Account Level", icon: PenLine },
+	{ href: "/strategist/persona", label: "Persona Level", icon: UserRound },
 	{ href: "/strategist/history", label: "Content History", icon: History },
 	{ href: "/strategist/saved", label: "Saved Sessions", icon: Star },
 ] as const;

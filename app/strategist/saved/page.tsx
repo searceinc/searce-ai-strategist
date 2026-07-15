@@ -42,7 +42,9 @@ export default function SavedSessionsPage() {
 				const store = useStrategistStore.getState();
 				store.setInput(normalizeGenerationInput(session.input));
 				store.hydrateFromSavedSession(session);
-				router.push("/strategist");
+				router.push(
+					session.input?.mode === "persona" ? "/strategist/persona" : "/strategist",
+				);
 			} catch {
 				toast.error("Failed to open session");
 			}

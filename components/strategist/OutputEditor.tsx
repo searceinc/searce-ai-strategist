@@ -16,6 +16,7 @@ import {
 	ChevronRight,
 	Lightbulb,
 	HelpCircle,
+	Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -31,11 +32,13 @@ import {
 	fetchUserSessions,
 	updateEditedContent,
 	incrementExportCount,
+	pushToHubspotDrafts,
 } from "@/lib/firebase/firestore";
 import { confidenceLabel } from "@/lib/constants";
 import { strategistPanelCardClass } from "@/lib/strategist-panel";
 import {
 	parseGeneratedContent,
+	extractExportTouches,
 	type SubjectOption,
 	type ParsedSection,
 } from "@/lib/parse-generated-content";
@@ -60,6 +63,7 @@ export default function OutputEditor() {
 
 	const [copied, setCopied] = useState(false);
 	const [saving, setSaving] = useState(false);
+	const [pushingToHubspot, setPushingToHubspot] = useState(false);
 	const [editMode, setEditMode] = useState(false);
 	const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 	const [selectedSubjectLetter, setSelectedSubjectLetter] = useState<
@@ -151,6 +155,42 @@ export default function OutputEditor() {
 			setSaving(false);
 		}
 	}, [currentSessionId, editedContent, user, setSessions]);
+
+	const handleSendToHubspot = useCallback(async () => {
+		const touches = extractExportTouches(editedContent, activeSectionId, selectedSubjectLetter);
+		if (touches.length === 0) {
+			toast.error("Nothing to send");
+			return;
+		}
+		setPushingToHubspot(true);
+		try {
+			const { created } = await pushToHubspotDrafts({
+				touches,
+				targetCompany: input.targetCompany,
+				format: input.selectedFormat,
+			});
+			created.forEach((draft, i) => {
+				toast.success(`Draft ${i + 1} of ${created.length} created in HubSpot`, {
+					description: "Unpublished — assign a contact and send from HubSpot.",
+					action: {
+						label: "Open",
+						onClick: () => window.open(draft.url, "_blank", "noopener"),
+					},
+				});
+			});
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : "Failed to send to HubSpot";
+			toast.error(msg);
+		} finally {
+			setPushingToHubspot(false);
+		}
+	}, [
+		editedContent,
+		activeSectionId,
+		selectedSubjectLetter,
+		input.targetCompany,
+		input.selectedFormat,
+	]);
 
 	const handleRegenerate = useCallback(async () => {
 		if (!currentSessionId) return;
@@ -374,9 +414,24 @@ export default function OutputEditor() {
 					</Button>
 
 					<Button
-						variant="default"
+						variant="secondary"
 						size="sm"
 						className="ml-auto cursor-pointer"
+						onClick={handleSendToHubspot}
+						disabled={pushingToHubspot}
+					>
+						{pushingToHubspot ? (
+							<Loader2 className="size-3.5 animate-spin" />
+						) : (
+							<Send className="size-3.5" />
+						)}
+						Send to HubSpot
+					</Button>
+
+					<Button
+						variant="default"
+						size="sm"
+						className="cursor-pointer"
 						onClick={handleSave}
 						disabled={saving || !currentSessionId}
 					>

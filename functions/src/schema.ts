@@ -17,6 +17,13 @@ const generationInputObjectSchema = z
 		targetPersonaCategory: z.string().optional().default(""),
 		targetPersonaSubCategory: z.string().optional().default(""),
 		targetPersonaJobTitle: z.string().optional().default(""),
+		mode: z.enum(["account", "persona"]).optional().default("account"),
+		personaName: z.string().optional().default(""),
+		personaLinkedInUrl: z.string().optional().default(""),
+		personaType: z
+			.enum(["champion", "economic_buyer", "influencer_user", "blocker"])
+			.optional(),
+		personaEntrancePath: z.enum(["bottoms_up", "top_down", "middle_out"]).optional(),
 		region: z.string().min(1),
 		selectedService: z.string(),
 		selectedFormat: z.string().min(1),
@@ -105,3 +112,21 @@ export const prospectUploadSchema = z.object({
 });
 
 export type ProspectUploadPayload = z.infer<typeof prospectUploadSchema>;
+
+// ─── Push to HubSpot (Marketing Email drafts) ───────────────────────────────
+
+export const pushToHubspotDraftsSchema = z.object({
+	touches: z
+		.array(
+			z.object({
+				subject: z.string(),
+				body: z.string().min(1),
+			}),
+		)
+		.min(1)
+		.max(6),
+	targetCompany: z.string().optional().default(""),
+	format: z.string().optional().default(""),
+});
+
+export type PushToHubspotDraftsPayload = z.infer<typeof pushToHubspotDraftsSchema>;

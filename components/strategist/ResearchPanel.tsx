@@ -10,6 +10,9 @@ import {
 	Zap,
 	Link2,
 	MousePointerClick,
+	UserRound,
+	Quote,
+	Flame,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -88,6 +91,14 @@ export default function ResearchPanel() {
 	const hasProof = caseStudyMatches.length > 0 || searceLinks.length > 0;
 	const hasExternal = externalSources.length > 0;
 
+	const isPersonaMode = input.mode === "persona";
+	const personaBio = research.personaBio ?? "";
+	const personaSignals = research.personaSignals ?? [];
+	const personaTriggers = research.personaTriggers ?? [];
+	const hasProfile = personaBio.trim().length > 0;
+	const hasSignals = personaSignals.length > 0;
+	const hasTriggers = personaTriggers.length > 0;
+
 	return (
 		<Card
 			className={cn(
@@ -131,7 +142,7 @@ export default function ResearchPanel() {
 			</CardHeader>
 
 			<Tabs
-				defaultValue="metrics"
+				defaultValue={isPersonaMode ? "profile" : "metrics"}
 				className="flex min-h-0 w-full flex-1 flex-col overflow-hidden"
 			>
 				<div className="shrink-0 border-b px-3 pt-1">
@@ -139,6 +150,41 @@ export default function ResearchPanel() {
 						variant="line"
 						className="h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0 pb-1.5"
 					>
+						{isPersonaMode && (
+							<>
+								<TabsTrigger
+									value="profile"
+									className="text-xs"
+									disabled={!hasProfile}
+								>
+									Profile
+								</TabsTrigger>
+								<TabsTrigger
+									value="signals"
+									className="text-xs"
+									disabled={!hasSignals}
+								>
+									Public Signals
+									{hasSignals && (
+										<span className="ml-1 rounded-full bg-muted px-1.5 py-px text-[10px] tabular-nums">
+											{personaSignals.length}
+										</span>
+									)}
+								</TabsTrigger>
+								<TabsTrigger
+									value="triggers"
+									className="text-xs"
+									disabled={!hasTriggers}
+								>
+									Triggers
+									{hasTriggers && (
+										<span className="ml-1 rounded-full bg-muted px-1.5 py-px text-[10px] tabular-nums">
+											{personaTriggers.length}
+										</span>
+									)}
+								</TabsTrigger>
+							</>
+						)}
 						<TabsTrigger value="metrics" className="text-xs" disabled={!hasMetrics}>
 							Metrics
 							{hasMetrics && (
@@ -178,6 +224,108 @@ export default function ResearchPanel() {
 				</div>
 
 				<div className={feedScrollRegionClass}>
+					{isPersonaMode && (
+						<>
+							<TabsContent value="profile" className="m-0 mt-0">
+								<CardContent className="p-4">
+									<FeedSection icon={UserRound} title="Profile & bio">
+										{hasProfile ? (
+											<p className="rounded-lg border bg-background p-3 text-sm leading-relaxed text-foreground">
+												{personaBio}
+											</p>
+										) : (
+											<p className="text-xs text-muted-foreground">
+												No bio found for this contact yet.
+											</p>
+										)}
+									</FeedSection>
+								</CardContent>
+							</TabsContent>
+
+							<TabsContent value="signals" className="m-0 mt-0">
+								<CardContent className="p-4">
+									<FeedSection
+										icon={Quote}
+										title="Public signals (quotes, interviews, LinkedIn activity)"
+									>
+										<div className="space-y-2">
+											{personaSignals.map((signal, i) => (
+												<div
+													key={i}
+													className="rounded-lg border bg-background p-3 transition-all hover:bg-accent/40"
+												>
+													<p className="text-sm leading-relaxed text-foreground">
+														{signal.text}
+													</p>
+													<div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+														<span className="max-w-[55%] truncate font-mono text-[10px] text-muted-foreground">
+															{signal.source}
+															{signal.date ? ` · ${signal.date}` : ""}
+														</span>
+														{signal.sourceUrl && (
+															<Button
+																variant="outline"
+																size="sm"
+																className="h-8 px-2"
+																asChild
+															>
+																<a
+																	href={signal.sourceUrl}
+																	target="_blank"
+																	rel="noopener noreferrer"
+																>
+																	<ExternalLink className="size-3.5" />
+																</a>
+															</Button>
+														)}
+													</div>
+												</div>
+											))}
+										</div>
+									</FeedSection>
+								</CardContent>
+							</TabsContent>
+
+							<TabsContent value="triggers" className="m-0 mt-0">
+								<CardContent className="p-4">
+									<FeedSection
+										icon={Flame}
+										title="Triggers for a personalized hook"
+									>
+										<div className="space-y-2">
+											{personaTriggers.map((trigger, i) => (
+												<div
+													key={i}
+													className="rounded-lg border bg-background p-3 transition-all hover:bg-accent/40"
+												>
+													<p className="text-sm text-foreground">
+														{trigger}
+													</p>
+													<div className="mt-2 flex justify-end">
+														<Button
+															type="button"
+															variant="secondary"
+															size="sm"
+															className="h-8 gap-1 px-2 text-xs"
+															onClick={() =>
+																void runFeedFocusedRewrite(
+																	`Persona trigger (from feed): ${trigger}`,
+																)
+															}
+														>
+															<MousePointerClick className="size-3.5" />
+															Refocus email
+														</Button>
+													</div>
+												</div>
+											))}
+										</div>
+									</FeedSection>
+								</CardContent>
+							</TabsContent>
+						</>
+					)}
+
 					<TabsContent value="metrics" className="m-0 mt-0">
 						<CardContent className="p-4">
 							<FeedSection
@@ -391,7 +539,12 @@ export default function ResearchPanel() {
 													<p className="truncate text-sm font-bold text-foreground">
 														{cs.title}
 													</p>
-													<p className="mt-0.5 text-xs text-muted-foreground">
+													{cs.context ? (
+														<p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+															{cs.context}
+														</p>
+													) : null}
+													<p className="mt-0.5 text-xs font-medium text-foreground/80">
 														{cs.metrics}
 													</p>
 												</div>

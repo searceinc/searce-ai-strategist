@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 
 export const tavilyApiKey = process.env.TAVILY_API_KEY;
 export const geminiApiKey = process.env.GEMINI_API_KEY;
+export const hubspotAccessToken = process.env.HUBSPOT_ACCESS_TOKEN;
 
 /** Must match NEXT_PUBLIC_FIRESTORE_DATABASE_ID when using a non-(default) Native DB. */
 const firestoreDatabaseId = process.env.FIRESTORE_DATABASE_ID?.trim();

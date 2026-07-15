@@ -1,6 +1,6 @@
 # Searce AI Strategist
 
-Internal B2B marketing content strategist for Searce. Researches target accounts using **Tavily** (web search) + **Firecrawl** (website crawling), finds proof points from Searce case studies, and generates high-conversion outreach content using **Gemini**.
+Internal B2B marketing content strategist for Searce. Researches target accounts using **Tavily** (web search) + crawls website (website crawling), finds proof points from Searce case studies, and generates high-conversion outreach content using **Gemini**.
 
 ---
 
@@ -14,7 +14,7 @@ Internal B2B marketing content strategist for Searce. Researches target accounts
 4. **Gemini generates the content** — using all the research + proof + a carefully crafted prompt
 5. **You edit & export** — tweak the draft, copy it, or download as `.txt`
 
-### Why Tavily + Firecrawl?
+### Why Tavily?
 
 | Tool          | What it does                                                   | Think of it as                               |
 | ------------- | -------------------------------------------------------------- | -------------------------------------------- |
@@ -41,7 +41,7 @@ This dual approach is why the content feels specific and credible rather than ge
 │  lib/firebase/     → Firebase Client SDK              │
 │  lib/store/        → Zustand state management         │
 │  lib/types.ts      → Client-side TypeScript types     │
-│  lib/constants.ts  → Dropdown options, labels          │
+│  lib/constants.ts  → Dropdown options, labels         │
 └──────────────────────┬────────────────────────────────┘
                        │ httpsCallable
 ┌──────────────────────▼────────────────────────────────┐
@@ -50,7 +50,6 @@ This dual approach is why the content feels specific and credible rather than ge
 │  functions/src/index.ts      → Callable functions     │
 │  functions/src/services/     → Business logic         │
 │  functions/src/tavily/       → Tavily search client   │
-│  functions/src/firecrawl/    → Firecrawl scrape client│
 │  functions/src/gemini/       → Gemini LLM client      │
 │  functions/src/prompts/      → Prompt templates       │
 └───────────────────────────────────────────────────────┘

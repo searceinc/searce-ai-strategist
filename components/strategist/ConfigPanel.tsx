@@ -21,6 +21,7 @@ import {
 	Upload,
 	X,
 	FileSpreadsheet,
+	Eraser,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,9 @@ import { Switch } from "@/components/ui/switch";
 import {
 	Select,
 	SelectContent,
+	SelectGroup,
 	SelectItem,
+	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
@@ -68,10 +71,19 @@ import {
 	STRATEGIC_ANGLES,
 	SEQUENCE_COUNT_OPTIONS,
 } from "@/lib/constants";
+import {
+	PERSONA_TITLES,
+	PERSONA_TITLE_CATEGORIES,
+	personaTitlesByCategory,
+	PERSONA_TYPE_OPTIONS,
+	PERSONA_ENTRANCE_PATH_OPTIONS,
+} from "@/lib/persona-titles";
 import type {
 	ContentFormat,
 	EmailSequenceLength,
 	GenerationInput,
+	PersonaEntrancePath,
+	PersonaType,
 	SearceService,
 	SequenceCount,
 	StrategicAngle,
@@ -120,6 +132,7 @@ export default function ConfigPanel() {
 		prospectUpload,
 		setProspectUpload,
 		clearProspectUpload,
+		resetAll,
 	} = useStrategistStore();
 
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -150,11 +163,18 @@ export default function ConfigPanel() {
 		}
 	}, [input.targetPersonaIndustry, input.targetPersonaCategory]); // eslint-disable-line react-hooks/exhaustive-deps
 
-	const canGenerate = input.region.trim() && input.selectedService.trim();
+	const canGenerate =
+		input.region.trim() &&
+		input.selectedService.trim() &&
+		(input.mode !== "persona" || input.personaName.trim());
 
 	async function handleGenerate() {
 		if (!canGenerate) {
-			toast.error("Please fill in Region and Service (Industry can be General)");
+			toast.error(
+				input.mode === "persona"
+					? "Please fill in Persona Name, Region and Service"
+					: "Please fill in Region and Service (Industry can be General)",
+			);
 			return;
 		}
 
@@ -310,10 +330,25 @@ export default function ConfigPanel() {
 	return (
 		<Card className="flex h-full flex-col overflow-hidden">
 			<CardHeader className="shrink-0 border-b">
-				<CardTitle className="flex items-center gap-2 text-base">
-					<Settings2 className="size-4 text-primary" />
-					Configuration
-				</CardTitle>
+				<div className="flex items-center justify-between gap-2">
+					<CardTitle className="flex items-center gap-2 text-base">
+						<Settings2 className="size-4 text-primary" />
+						Configuration
+					</CardTitle>
+					<Button
+						variant="ghost"
+						size="sm"
+						className="h-8 cursor-pointer"
+						disabled={isGenerating}
+						onClick={() => {
+							resetAll();
+							toast.success("Cleared — ready for a new prospect");
+						}}
+					>
+						<Eraser className="size-3.5" />
+						Clear
+					</Button>
+				</div>
 				<p className="text-xs text-muted-foreground">Target your prospect with precision</p>
 			</CardHeader>
 
@@ -462,6 +497,141 @@ export default function ConfigPanel() {
 						)}
 					</fieldset>
 
+					{input.mode === "persona" && (
+						<>
+							<Separator />
+
+							{/* ── Persona Identity ── */}
+							<fieldset className="space-y-3">
+								<legend className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+									<User className="size-3.5" />
+									Persona Identity
+								</legend>
+
+								<FormField
+									icon={User}
+									label="Full Name"
+									required
+									help="The named contact this content is written for. The AI researches and personalizes on this specific person, not just their company."
+								>
+									<Input
+										placeholder="e.g. Sneha Hiranandani"
+										value={input.personaName}
+										onChange={(e) => setInput({ personaName: e.target.value })}
+									/>
+								</FormField>
+
+								<FormField
+									icon={Briefcase}
+									label="Title"
+									help="Pick from the standard persona list, or use the custom field below if their exact title isn't listed."
+								>
+									<Select
+										value={
+											PERSONA_TITLES.some(
+												(t) => t.title === input.targetPersonaJobTitle,
+											)
+												? input.targetPersonaJobTitle
+												: ""
+										}
+										onValueChange={(v) =>
+											setInput({ targetPersonaJobTitle: v })
+										}
+									>
+										<SelectTrigger className="w-full">
+											<SelectValue placeholder="Select a title" />
+										</SelectTrigger>
+										<SelectContent>
+											{PERSONA_TITLE_CATEGORIES.map((cat) => (
+												<SelectGroup key={cat}>
+													<SelectLabel>{cat}</SelectLabel>
+													{personaTitlesByCategory(cat).map((t) => (
+														<SelectItem key={t.title} value={t.title}>
+															{t.title}
+														</SelectItem>
+													))}
+												</SelectGroup>
+											))}
+										</SelectContent>
+									</Select>
+								</FormField>
+
+								<FormField icon={Briefcase} label="Custom title (if not listed)">
+									<Input
+										placeholder="e.g. Head of Platform Engineering"
+										value={input.targetPersonaJobTitle}
+										onChange={(e) =>
+											setInput({ targetPersonaJobTitle: e.target.value })
+										}
+									/>
+								</FormField>
+
+								<FormField icon={Link2} label="LinkedIn URL">
+									<Input
+										placeholder="e.g. linkedin.com/in/..."
+										value={input.personaLinkedInUrl}
+										onChange={(e) =>
+											setInput({ personaLinkedInUrl: e.target.value })
+										}
+									/>
+								</FormField>
+
+								<div className="space-y-1.5">
+									<Label className="text-xs font-medium">Persona Type</Label>
+									<div className="grid grid-cols-2 gap-2">
+										{PERSONA_TYPE_OPTIONS.map((opt) => (
+											<button
+												key={opt.value}
+												type="button"
+												onClick={() =>
+													setInput({
+														personaType: opt.value as PersonaType,
+													})
+												}
+												className={`cursor-pointer rounded-md border-2 px-3 py-2.5 text-left transition-colors ${
+													input.personaType === opt.value
+														? "border-primary bg-primary/10 text-primary"
+														: "border-border bg-background hover:bg-muted"
+												}`}
+											>
+												<p className="text-xs font-semibold">{opt.label}</p>
+												<p className="mt-0.5 text-[10px] text-muted-foreground">
+													{opt.description}
+												</p>
+											</button>
+										))}
+									</div>
+								</div>
+
+								<FormField
+									icon={Target}
+									label="Entrance Path"
+									help="How this contact enters the sales motion — shapes whether the sequence is high-touch/multi-channel or a lighter single track."
+								>
+									<Select
+										value={input.personaEntrancePath ?? ""}
+										onValueChange={(v) =>
+											setInput({
+												personaEntrancePath: v as PersonaEntrancePath,
+											})
+										}
+									>
+										<SelectTrigger className="w-full">
+											<SelectValue placeholder="Select entrance path (optional)" />
+										</SelectTrigger>
+										<SelectContent>
+											{PERSONA_ENTRANCE_PATH_OPTIONS.map((opt) => (
+												<SelectItem key={opt.value} value={opt.value}>
+													{opt.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</FormField>
+							</fieldset>
+						</>
+					)}
+
 					<Separator />
 
 					{/* ── Target Persona ── */}
@@ -556,19 +726,21 @@ export default function ConfigPanel() {
 								</FormField>
 							)}
 
-						<FormField
-							icon={User}
-							label="Job Title"
-							help="The recipient's actual role (e.g. CIO, VP Engineering, Marketing Director). The AI writes directly to this persona — be specific."
-						>
-							<Input
-								placeholder="e.g. VP of Engineering (optional)"
-								value={input.targetPersonaJobTitle}
-								onChange={(e) =>
-									setInput({ targetPersonaJobTitle: e.target.value })
-								}
-							/>
-						</FormField>
+						{input.mode !== "persona" && (
+							<FormField
+								icon={User}
+								label="Job Title"
+								help="The recipient's actual role (e.g. CIO, VP Engineering, Marketing Director). The AI writes directly to this persona — be specific."
+							>
+								<Input
+									placeholder="e.g. VP of Engineering (optional)"
+									value={input.targetPersonaJobTitle}
+									onChange={(e) =>
+										setInput({ targetPersonaJobTitle: e.target.value })
+									}
+								/>
+							</FormField>
+						)}
 					</fieldset>
 
 					<Separator />

@@ -41,3 +41,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# scratch / backup artifacts
+tmp-master-deck.txt
+scripts/.tmp-master-deck-extract.txt
+*.bak

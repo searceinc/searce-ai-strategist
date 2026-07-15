@@ -3,7 +3,14 @@ import type { CloudContext } from "../data/cloud-context.js";
 import { INDUSTRY_LABELS, REGION_LABELS } from "../data/labels.js";
 import { resolveTaxonomyLabels } from "../data/pain-points.js";
 import { getAngleCTA } from "../data/ctas.js";
-import { buildFormatInstructions } from "./format-structures.js";
+import { getStoryById } from "../data/case-studies.js";
+import { BOLD_RULES_PROMPT } from "./bold-rules.js";
+import { buildFormatInstructions, FOUR_T_CANONICAL_EXAMPLE } from "./format-structures.js";
+
+function truncateText(s: string, n: number): string {
+	const t = (s ?? "").trim();
+	return t.length <= n ? t : `${t.slice(0, n).replace(/\s+\S*$/, "")}…`;
+}
 
 // ─── System Prompt ───────────────────────────────────────────────────────────
 
@@ -24,7 +31,7 @@ export function buildSystemPrompt(brief: ContentBrief, cloudContext: CloudContex
 			? caseStudies
 					.map(
 						(cs) =>
-							`- ${cs.client} — ${cs.metrics} (URL: ${cs.url}) — Markdown anchor MUST use this exact client name as the link label: [${cs.client}](${cs.url}). Never a generic label.`,
+							`- CLIENT NAME (spell exactly in Trust beat): "${cs.client}" — ${cs.metrics}. Use this exact string as the company name in prose (e.g. "We helped ${cs.client}…"). Never substitute a case-study title, outcome phrase, or sentence fragment for the client name.`,
 					)
 					.join("\n")
 			: "(none — do not invent case studies; speak in capability terms grounded in the practices below)";
@@ -70,6 +77,16 @@ You are a senior B2B field marketer at Searce writing as one human to another. Y
 - Contractions are fine ("we've", "you're", "I've"). Prefer them.
 - Reference is fine. "Recently" is fine. "I noticed" is fine. "I've been following…" is fine. Don't preamble.
 
+## THE 4T EMAIL FRAMEWORK (MANDATORY STRUCTURE FOR EVERY EMAIL)
+Every email you write follows Josh Braun's **4T** cold-email structure. The body must move through these four beats **in order** (each beat = one or more of the micro-paragraphs the schema asks for):
+1. **Trigger (Why you):** Open with ONE observant, specific detail about the prospect's business — a recent signal, a sub-industry dynamic, or a tool/process they likely rely on. It must read like you researched *them*, not a mass blast. No "I hope this finds you well", no "I wanted to reach out".
+2. **Think (Neutral question):** Pose ONE low-pressure question about a likely pain point, phrased so it's genuinely easy to say "no" to. Give them an out (e.g. "…or have you decided the effort isn't worth it?"). You are diagnosing, not pitching.
+3. **Third-Party Credibility (Trust):** Share ONE brief success story of a similar Searce client (named in **plain text**, never linked). Focus on **how it works** and the real result — not adjectives. One client, one mechanism, one metric.
+4. **Talk (Low-friction CTA):** Close with a soft, conversational question that gauges interest ("Worth a quick look?", "Open to comparing notes?"). **NEVER** ask for a meeting, demo, or call directly.
+This 4T spine governs BOTH the LONG and SHORT versions, every email in a sequence, every InMail variation, and every Conversation Ad path. Keep it tight, specific and human.
+
+${FOUR_T_CANONICAL_EXAMPLE}
+
 ## NEVER MAKE FAKE PROMISES (HARD RULE)
 - Searce sells outcomes we have actually delivered before. Do NOT claim a capability unless one of the following is true:
   (a) it appears in the VERIFIED CASE STUDIES list below, OR
@@ -84,11 +101,11 @@ ${allowedPractices}
 ${caseStudyRefs}
 ${generalPovBlock}${generalServiceBlock}
 
-## INLINE LINKING RULES (HARD)
-- ONLY hyperlink Searce case studies. The Markdown link label must be the **exact verified client name** from the list (e.g. \`[Rebel Foods](https://www.searce.com/...)\`). **Never** use generic link labels such as \`[Multiple clients]\`, \`[Several clients]\`, \`[Client]\`, or \`[Case study]\`.
-- DO NOT hyperlink Tavily research stats, news articles, blog posts, third-party reports, or any non-Searce URL. If you cite a stat from live research, write it in plain prose with no link — the rep will see the source in the Intelligence Feed sidebar.
-- The only allowed link target is a Searce-owned URL (searce.com / searce.com/archive/...). Anything else is forbidden.
-- Do NOT add a "Verified Searce Resources", "Sources", "Citations", or "References" block at the end of the message. The Intelligence Feed handles external proof separately.
+## INLINE LINKING RULES (HARD) — NO LINKS
+- This build has **no per-story case-study URLs**, so **do NOT hyperlink anything**. Name the verified client in **plain text** (e.g. *Kogta* or *Rebel Foods*) as your third-party proof. Never invent or guess a URL.
+- **Never** use generic placeholders such as \`[Multiple clients]\`, \`[Several clients]\`, \`[Client]\`, or \`[Case study]\` — name the **real** client from the VERIFIED CASE STUDIES list, or stay capability-led.
+- DO NOT hyperlink Tavily research stats, news articles, blog posts, third-party reports, or any URL. Cite live-research stats in plain prose — the rep sees the source in the Intelligence Feed sidebar.
+- Do NOT add a "Verified Searce Resources", "Sources", "Citations", or "References" block. The Intelligence Feed handles external proof separately.
 
 ## OUTPUT FORMAT — HARD RULES
 - Your response is parsed by a strict JSON schema. Fill the schema fields with prose only.
@@ -98,19 +115,23 @@ ${generalPovBlock}${generalServiceBlock}
   • \`[LastName]\` — recipient last name, **at most once** in LONG and once in SHORT if useful; omit if unsure.
   • \`[Company name]\` — **only** when **no** company is supplied in TARGET PROFILE **and** a company merge makes that line read sharper (e.g. one question or proof beat). **At most once** in LONG and **at most once** in SHORT; **omit entirely** if sub-industry / role-led copy is stronger without naming an org. When a real company name is supplied below, write it in plain text and **never** \`[Company name]\`.
   • \`[Industry name]\` — **optional**; **at most once** per LONG body and **at most once** per SHORT body, **only** where a CRM industry field reads more natural than repeating the literal sector. Prefer plain prose using the sector labels from TARGET PROFILE for most lines. **Do not** litter the email with bracket tokens; avoid using \`[Company name]\` and \`[Industry name]\` in the same tight sentence unless it still sounds like a human wrote it.
-- Use \`**bold**\` for **scan-friendly emphasis**, not decoration: **4–7** short spans in LONG and **3–5** in SHORT. **Distribute** bold across the email (hook, tension, bullets, proof — not five hits in one sentence).
-- **What may be bold:** (1) **Metric + context** — prefer **10% human error rates** or **40% faster cycle time** over a naked **10%** when the words carry meaning. (2) **2–4 word pain / friction hooks** the reader would underline (**back-office friction**, **fragmented carrier data**). (3) **Proper nouns** when they are the focal point. (4) In a **•** comparison block, bold **short labels + colon** at the start of a line (**Legacy process:** … **AI-native path:** … **Result:** …) so the block reads like the reference style. (5) At most **one** optional bold mini-heading (same label+colon pattern) to introduce a pivot or question — keep it human ("**The question:** …"), never an outline slug.
-- **What must never be bold:** connector or filler words alone — including: before, after, when, while, once, if, and, or, but, so, we, our, your, the, a, an, this, that, these, those, it, is, are, was, were, also, just, very, here, there. Do **not** bold a whole sentence. **Never** open a normal prose sentence with bold unless the first token is a **number**, a **proper noun**, or a deliberate **Label:** pattern above.
+${BOLD_RULES_PROMPT}
+
+## CLIENT NAME IN TRUST BEAT (HARD)
+- The Trust beat **must** name the verified client using the **exact CLIENT NAME** string from VERIFIED CASE STUDIES above — spelled identically (e.g. **Indegene**, **Floweraura**, **Moglix**).
+- **Never** use the case-study title, a metric line, or a descriptive sentence as the client (wrong: "Real-time Insights Into Customer", "Centralized Data Warehouse and Reporting").
+- If the client name is a short anonymized label (e.g. "Food Ordering App", "Cab Hailing App"), use that label verbatim.
 - Do **not** use any other bracketed placeholders (\`[Your team]\`, \`[Multiple clients]\`, \`[Region]\`, etc.).
 - DO NOT wrap any phrase in literal angle brackets (\`<\` / \`>\`). Replace placeholder-style \`<…>\` with real words.
 
 ## SUBJECT-LINE A/B/C/D RULE (emails only)
+- 4T subjects are **short, lowercase-feeling and low-pressure** — like a note from a peer, not a campaign. Think "Open to this?", "quick question, [FirstName]", "worth a look?". Avoid hype, ALL-CAPS, and feature names.
 - Output 3–4 \`subjects\` items. Each variant uses a DIFFERENT angle:
-  • A — Specific question
-  • B — Benefit / number
+  • A — Specific question (ties to the Trigger or Think beat)
+  • B — Benefit / number (a real outcome, understated)
   • C — Provocation / contrarian
   • D — Curiosity / pattern interrupt (optional 4th)
-- Subjects must be under 60 characters. Preview lines under 90 characters.
+- Subjects must be under 60 characters (aim well under). Preview lines under 90 characters.
 - Variants must read as visibly different choices to a marketer. If A and B sound similar, rewrite B.
 
 ## STRATEGIST NOTE
@@ -150,7 +171,7 @@ Service in scope: ${isGeneralService ? "General Searce capabilities — pick the
 ## QUALITY BAR
 1. Every word earns its place. No filler.
 2. No "AI speak". If a sentence sounds like a chatbot wrote it, rewrite it.
-3. Inline anchors only — no trailing source / reference blocks.
+3. Clients named in plain text only — no inline links, no trailing source / reference blocks.
 4. Subject + preview variants must read distinctly different to a human; if A and B sound similar, rewrite B.
 5. Output must be immediately usable by a sales rep without editing out brackets, placeholders, or AI tells.`;
 }
@@ -199,6 +220,31 @@ ${isGeneralPov ? "Industry Context (general POV)" : "Industry Context"}: ${indus
 		prompt += `\n## USER-SELECTED INTELLIGENCE FEED SIGNAL (highest priority)\nThe rep chose to **rewrite the email around this signal**. Make both \`longParagraphs\` and \`shortParagraphs\` clearly reflect it in the opening and body (paraphrase; do not paste URLs; no "Source:", "Case reference:", or citation lines). Weave it into the story the way a rep would say it aloud.\n\n${feedFocus}\n\n`;
 	}
 
+	if (input.mode === "persona") {
+		const bio = research.personaBio?.trim();
+		const signals = research.personaSignals ?? [];
+		const triggers = research.personaTriggers ?? [];
+		prompt += `\n## PERSON RESEARCH (persona-level — highest priority for the opening)\n`;
+		prompt += bio
+			? `Bio: ${bio}\n`
+			: `Bio: none found — do not invent career facts about this person.\n`;
+		if (signals.length > 0) {
+			prompt += `Public signals (their own quotes / interviews / LinkedIn activity):\n`;
+			for (const s of signals.slice(0, 5)) {
+				prompt += `- ${s.text.slice(0, 220)}${s.date ? ` (${s.date})` : ""}\n`;
+			}
+		}
+		if (triggers.length > 0) {
+			prompt += `Triggers (use ONE of these, cited, as the personalized hook — do not open generically):\n`;
+			for (const t of triggers.slice(0, 5)) {
+				prompt += `- ${t.slice(0, 220)}\n`;
+			}
+		}
+		if (signals.length === 0 && triggers.length === 0) {
+			prompt += `No specific public signal was found for this person — open on their role/company context instead of fabricating a personal detail.\n`;
+		}
+	}
+
 	if (research.metricsWithUrls.length > 0) {
 		prompt += `\n## LIVE TAVILY RESEARCH METRICS (background context — DO NOT hyperlink)\n`;
 		prompt += `These are signals you can paraphrase in plain prose. The rep will see the source in the Intelligence Feed. Never embed these URLs as Markdown links in the email body.\n`;
@@ -228,7 +274,7 @@ ${isGeneralPov ? "Industry Context (general POV)" : "Industry Context"}: ${indus
 	if ((research.externalSources ?? []).length > 0) {
 		const ext = research.externalSources ?? [];
 		prompt += `\n## EXTERNAL SOURCES (sidebar / Intelligence Feed ONLY)\n`;
-		prompt += `These URLs are for the rep in the UI — **never** put them in the email as links or "References:" lines. Tell the story in prose; one Searce case anchor is allowed.\n`;
+		prompt += `These URLs are for the rep in the UI — **never** put them in the email as links or "References:" lines. Tell the story in prose; name one verified Searce client in plain text (no link).\n`;
 		prompt += `Rows may include extra Tavily hits (tagged \`reference\`) beyond the primary news/metrics/pain rows — all are third-party; do not link them in the body.\n`;
 		for (let i = 0; i < Math.min(ext.length, 8); i++) {
 			const ex = ext[i]!;
@@ -249,12 +295,36 @@ ${input.targetLinkedInUrl ? `- LinkedIn: ${input.targetLinkedInUrl}` : ""}
 - Searce Service in scope: ${isGeneralService ? "General — pick ONE practice that the research + verified case studies justify" : (input.selectedService?.replace(/_/g, " ") ?? "Not specified")}
 - Cloud Ecosystem: ${input.cloudEcosystem.toUpperCase()} (${cloudContext.partnerStatus})
 - Strategic Angle: ${input.strategicAngle.replace(/_/g, " ")}
-`;
+${
+	input.mode === "persona"
+		? `
+## PERSON PROFILE (persona-level — this email is written TO this specific individual, not a generic role)
+- Name: ${input.personaName || "Not provided"}
+- Title: ${input.targetPersonaJobTitle || "Not provided"}
+- LinkedIn: ${input.personaLinkedInUrl || "Not provided"}
+- Buying role: ${input.personaType ? input.personaType.replace(/_/g, " ") : "Not specified"}
+- Entrance path: ${input.personaEntrancePath ? input.personaEntrancePath.replace(/_/g, " ") : "Not specified"}
+Rules for persona-level: the greeting line itself stays "Hi [FirstName]," (a CRM merge tag — do not replace it or add a second greeting), but the very next line must open with the ONE cited signal from PERSON RESEARCH above (never a generic company-level trigger), and the ask/CTA should fit their buying role (a Champion gets a collaborative tone; an Economic Buyer gets ROI/risk framing; a Blocker gets a low-friction, risk-acknowledging tone).
+`
+		: ""
+}`;
 
 	if (caseStudies.length > 0) {
-		prompt += `\n## VERIFIED CASE STUDIES (the only proof you may name)\n`;
+		prompt += `\n## VERIFIED CASE STUDIES (real referenceable Searce clients — use ONE as your 4T "Third-Party Credibility" beat)\n`;
+		prompt += `Pick the ONE story that best fits this prospect's pain. In the Trust beat, spell the **CLIENT NAME** field exactly (no link). Tell it briefly: what they faced → HOW Searce solved it → the real result. Use the real numbers; never invent or inflate.\n`;
 		for (const cs of caseStudies) {
-			prompt += `- ${cs.client}: "${cs.metrics}" — ${cs.context}\n  Anchor: [${cs.client}](${cs.url})\n`;
+			const story = getStoryById(cs.id);
+			const region = story?.region ? `, ${story.region}` : "";
+			const practice = story?.practiceLabel ? ` — ${story.practiceLabel}` : "";
+			prompt += `\n### ${cs.client}${practice}${region}\n`;
+			prompt += `- Focus: ${story?.summary ?? cs.context}\n`;
+			if (story?.businessContext)
+				prompt += `- They faced: ${truncateText(story.businessContext, 300)}\n`;
+			if (story?.solution)
+				prompt += `- How Searce solved it: ${truncateText(story.solution, 340)}\n`;
+			prompt += `- Result / proof: ${truncateText(story?.impact ?? cs.metrics, 300)}\n`;
+			if (story?.techStack)
+				prompt += `- Tech (mention only if it sharpens credibility): ${story.techStack}\n`;
 		}
 	} else {
 		prompt += `\nNOTE: No direct case study match. Speak in capability terms grounded in the ALLOWED SEARCE PRACTICES list. Do not invent a client.\n`;
@@ -297,8 +367,8 @@ ${formatInstructions}
 ## CRITICAL REMINDERS
 - Use ${cloudContext.terminology} terminology only where it adds value. Do not force.
 - Mention ${cloudContext.partnerStatus} once, subtly, INSIDE another sentence. NEVER as a standalone sentence ("We're a Google Cloud Managed Services Partner..." is FORBIDDEN). NEVER as the opening line.
-- ONLY name case studies / clients that appear in the VERIFIED CASE STUDIES list. Anchor them as Markdown links pointing at the Searce URL. Use ONE Searce anchor per email body — not multiple.
-- DO NOT hyperlink Tavily metrics, news articles, or any third-party / external source in the body. Searce links only. The Intelligence Feed shows external sources separately.
+- ONLY name case studies / clients that appear in the VERIFIED CASE STUDIES list. Name exactly ONE client in PLAIN TEXT as the Third-Party Credibility beat — do NOT hyperlink it, and never name more than one client per email.
+- DO NOT hyperlink anything in the body — no case-study links, no Tavily metrics, no news, no bare URLs. The Intelligence Feed shows sources separately.
 - DO NOT use any phrase from the forbidden list in the system prompt.
 - DO NOT prefix paragraphs with **draft / pipeline** markers the rep would delete: no ALL-CAPS stage tags (GREETING:, OPENING:, BODY:, CONTEXT:, CAPABILITIES:, PROOF LINE:, CTA:, CLOSING:, P1, PARAGRAPH 2, etc.). **Allowed in prose:** bold **short mini-titles with a colon** (Title or sentence case) for scanability — e.g. **The transformation:**, **Legacy process:**, **The question:** — especially inside a **•** comparison block; keep each label a few words before the colon.
 - DO NOT prefix any paragraph with "Hi …" — the server inserts the greeting. DO NOT include a sign-off line ([Your Name] | Searce) inside a paragraph — the server inserts that too.
@@ -314,8 +384,8 @@ Before you finalize the response:
 3. Keep most sentences ≤ 22 words. Use one array entry for a **•** bullet mini-list (2–4 lines) when helpful.
 4. \`longParagraphs\` total word count: ≤ ~180 (≤ ~130 for LinkedIn InMail; per sequence email ≤ ~170, closing email ≤ ~102).
 5. \`shortParagraphs\` total word count: ≤ ~128 (≤ ~88 for LinkedIn InMail).
-6. Exactly ONE Markdown link in any single email body — the Searce client anchor with the **real client name** as the label. Zero external hyperlinks or bare third-party URLs.
-7. **Bold:** follow the system rules — metrics with their nouns, pain phrases, optional **Label:** lines in bullet blocks, proper nouns; never bold glue words alone; no ALL-CAPS pipeline tags, no \`<…>\` placeholders, no "Sources" footer.
+6. **Zero hyperlinks** anywhere in the body. Exactly ONE verified client named in **plain text** as the proof beat. No bare URLs, no Markdown links.
+7. **Bold:** max 2–3 spans total; ONLY digit-bearing metrics and/or CLIENT NAME in Trust beat — never generic phrases (operational complexity, AI-ready data, better decision making). Trust beat uses exact CLIENT NAME from VERIFIED CASE STUDIES.
 If ANY check fails, REWRITE the response field BEFORE returning.`;
 
 	return prompt;
@@ -348,7 +418,7 @@ const ANGLE_INSTRUCTIONS: Record<string, AngleBuilder> = {
 	social_proof: (_industryName, input) => `
 ## STRATEGIC ANGLE: SOCIAL PROOF FOCUS — Case Study Narrator
 - Open with a vivid "before" scenario a ${input.targetPersonaJobTitle || "peer"} would recognize in their own org.
-- Tell the story of ONE specific verified Searce case. Use one inline anchor on the client name.
+- Tell the story of ONE specific verified Searce case. Name the client in plain text (no link).
 - Use real before/after numbers from the case — never invent them.
 - Close by drawing a parallel to the reader's situation, not a generic pitch.`,
 
@@ -359,9 +429,9 @@ const ANGLE_INSTRUCTIONS: Record<string, AngleBuilder> = {
 			: (input.selectedService?.replace(/_/g, " ") ?? "starting point");
 		return `
 ## STRATEGIC ANGLE: DIRECT PITCH FOCUS — Confident Authority
-- Skip preamble. Go straight to ${serviceLabel} for ${sectorPhrase(industryName, input)}.
-- Be specific: the practice in scope, a realistic timeline, and the kind of impact a ${input.targetPersonaJobTitle || "leader"} would care about.
-- One sentence of "we've done this before" with an inline anchor. Don't oversell.
-- Dead-simple CTA. One action.`;
+- Open on a sharp **Trigger** (no fluff preamble), then move quickly to ${serviceLabel} for ${sectorPhrase(industryName, input)}.
+- Be specific: the practice in scope, a realistic timeline, and the kind of impact a ${input.targetPersonaJobTitle || "leader"} would care about — still framed through the 4T arc.
+- One sentence of "we've done this before", naming the client in plain text. Don't oversell.
+- Close on a soft, low-friction **Talk** question — confident, never a hard meeting ask.`;
 	},
 };

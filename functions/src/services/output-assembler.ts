@@ -7,6 +7,7 @@
  * enforcement happens here before we hand the string back.
  */
 
+import { sanitizeBoldInText } from "../prompts/bold-rules.js";
 import type { SequenceResponse, SingleEmailResponse, SubjectOption } from "./output-schemas.js";
 import type { ContentFormat } from "../types.js";
 
@@ -38,14 +39,17 @@ export function assembleSingleEmail(resp: SingleEmailResponse, format: ContentFo
 	const caps = singleEmailCaps(format);
 
 	const longParagraphs = enforceParagraphLengths(
-		(resp.longParagraphs ?? []).slice(0, MAX_PARAGRAPHS).map(sanitizeParagraph).filter(Boolean),
+		(resp.longParagraphs ?? [])
+			.slice(0, MAX_PARAGRAPHS)
+			.map((p) => sanitizeParagraph(p, format))
+			.filter(Boolean),
 		caps.longWordMax,
 	);
 
 	const shortParagraphs = enforceTotalWordCap(
 		(resp.shortParagraphs ?? [])
 			.slice(0, MAX_PARAGRAPHS)
-			.map(sanitizeParagraph)
+			.map((p) => sanitizeParagraph(p, format))
 			.filter(Boolean),
 		caps.shortWordMax,
 	);
@@ -72,7 +76,10 @@ export function assembleSingleEmail(resp: SingleEmailResponse, format: ContentFo
 	return out.join("\n");
 }
 
-export function assembleSequence(resp: SequenceResponse): string {
+export function assembleSequence(
+	resp: SequenceResponse,
+	format: ContentFormat = "email_sequence",
+): string {
 	const out: string[] = [];
 
 	const cadence = (resp.cadenceLine ?? "").replace(/^[\s\-–—:]+/g, "").trim();
@@ -85,7 +92,10 @@ export function assembleSequence(resp: SequenceResponse): string {
 		const cap = isFinal ? SEQUENCE_FINAL_WORD_MAX : SEQUENCE_LONG_WORD_MAX;
 
 		const paragraphs = enforceParagraphLengths(
-			(e.paragraphs ?? []).slice(0, MAX_PARAGRAPHS).map(sanitizeParagraph).filter(Boolean),
+			(e.paragraphs ?? [])
+				.slice(0, MAX_PARAGRAPHS)
+				.map((p) => sanitizeParagraph(p, format))
+				.filter(Boolean),
 			cap,
 		);
 
@@ -152,7 +162,7 @@ function renderSubjects(subjects: SubjectOption[]): string {
 
 // ─── Paragraph + length enforcement ────────────────────────────────────────
 
-function sanitizeParagraph(input: string): string {
+function sanitizeParagraph(input: string, format?: ContentFormat): string {
 	if (typeof input !== "string") return "";
 	let p = input.replace(/\r\n/g, "\n").trim();
 
@@ -207,7 +217,7 @@ function sanitizeParagraph(input: string): string {
 			.replace(/\s{2,}/g, " ")
 			.trim();
 	}
-	return p;
+	return sanitizeBoldInText(p, format);
 }
 
 /**

@@ -28,6 +28,13 @@ export type LinkedinInmailVariation = "1" | "2";
 
 export type StrategicAngle = "pain_point" | "roi_metrics" | "social_proof" | "direct_pitch";
 
+/** Account-level (generic company POV) vs persona-level (named individual). */
+export type GenerationMode = "account" | "persona";
+/** Persona-level only: buying role in the deal. */
+export type PersonaType = "champion" | "economic_buyer" | "influencer_user" | "blocker";
+/** Persona-level only: how this contact enters the sales motion. */
+export type PersonaEntrancePath = "bottoms_up" | "top_down" | "middle_out";
+
 export type SearceService =
 	| "general"
 	| "cloud_modernization"
@@ -59,6 +66,16 @@ export interface GenerationInput {
 	/** Industry-sub-category slug (e.g. "retail-and-consumer") sourced from sheet 3. */
 	targetPersonaSubCategory: string;
 	targetPersonaJobTitle: string;
+	/** Account-level (generic company POV) vs persona-level (named individual). */
+	mode: GenerationMode;
+	/** Persona-level only: the named contact's full name. */
+	personaName: string;
+	/** Persona-level only: the named contact's LinkedIn profile URL. */
+	personaLinkedInUrl: string;
+	/** Persona-level only: buying role in the deal. */
+	personaType?: PersonaType;
+	/** Persona-level only: how this contact enters the sales motion. */
+	personaEntrancePath?: PersonaEntrancePath;
 	region: string;
 	selectedService: SearceService | "";
 	selectedFormat: ContentFormat;
@@ -114,6 +131,19 @@ export interface ResearchSnapshot {
 	externalSources: ExternalSourceItem[];
 	isLiveData: boolean;
 	timestamp: string;
+	/** Persona-level only: named contact's bio/career summary. */
+	personaBio?: string;
+	/** Persona-level only: dated public signals (quotes, interviews, LinkedIn activity). */
+	personaSignals?: PersonaSignalItem[];
+	/** Persona-level only: hard/soft evidence bullets that could drive a personalized hook. */
+	personaTriggers?: string[];
+}
+
+export interface PersonaSignalItem {
+	text: string;
+	source: string;
+	sourceUrl: string;
+	date?: string;
 }
 
 export interface ExternalSourceItem {
@@ -140,6 +170,9 @@ export function normalizeResearchSnapshot(
 		externalSources: r.externalSources ?? [],
 		isLiveData: r.isLiveData ?? false,
 		timestamp: r.timestamp ?? "",
+		personaBio: r.personaBio ?? "",
+		personaSignals: r.personaSignals ?? [],
+		personaTriggers: r.personaTriggers ?? [],
 	};
 }
 
@@ -188,6 +221,7 @@ export interface SessionSummary {
 	userId: string;
 	createdAt: Timestamp;
 	updatedAt: Timestamp;
+	mode: GenerationMode;
 	targetCompany: string;
 	targetPersonaJobTitle: string;
 	selectedFormat: ContentFormat;

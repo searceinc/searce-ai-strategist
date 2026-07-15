@@ -17,6 +17,7 @@ export function docToSessionSummary(id: string, data: DocumentData): Record<stri
 		userId: data.userId,
 		createdAt: serializeField(data.createdAt),
 		updatedAt: serializeField(data.updatedAt),
+		mode: input.mode ?? "account",
 		targetCompany: input.targetCompany ?? "",
 		targetPersonaJobTitle: input.targetPersonaJobTitle ?? "",
 		selectedFormat: input.selectedFormat ?? "cold_email",

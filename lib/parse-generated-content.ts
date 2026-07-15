@@ -474,3 +474,73 @@ function recoveredBody(value: unknown): string {
 	if (typeof value === "string") return value;
 	return "";
 }
+
+// ─── Export touches (HubSpot draft push) ───────────────────────────────────
+
+export interface ExportTouch {
+	subject: string;
+	body: string;
+}
+
+/**
+ * One {subject, body} pair per email that should actually be sent: every
+ * touch for a sequence, or just the currently active Long/Short variant for
+ * a single-touch format.
+ *
+ * Sequences need their own pass here rather than reusing `sections`/
+ * `subjects` above: each "EMAIL N" block declares its own SUBJECT OPTION
+ * lines, but `extractSubjectOptions` above scans the whole raw text into one
+ * global map, so only the last email's subjects survive. This re-derives
+ * subjects per block from the raw text before any stripping happens.
+ */
+export function extractExportTouches(
+	raw: string,
+	activeSectionId: string | null,
+	selectedSubjectLetter: "A" | "B" | "C" | "D" | null,
+): ExportTouch[] {
+	const trimmed = (raw ?? "").trim();
+	if (!trimmed) return [];
+	const recovered = recoverFromRawJson(trimmed);
+	const working = recovered ?? trimmed;
+	const { body } = splitStrategistNote(working);
+
+	if (EMAIL_HEADER_RE.test(body)) {
+		const headerRe = /^\s*EMAIL\s+(\d+)\b.*$/gim;
+		const headers: { index: number; lineEnd: number }[] = [];
+		let m: RegExpExecArray | null;
+		while ((m = headerRe.exec(body)) !== null) {
+			headers.push({ index: m.index, lineEnd: m.index + m[0].length });
+		}
+		return headers.map((h, i) => {
+			const next = headers[i + 1];
+			const blockRaw = body.slice(h.lineEnd, next ? next.index : body.length);
+			const blockSubjects = extractSubjectOptions(blockRaw);
+			const subject =
+				blockSubjects.find((s) => s.letter === selectedSubjectLetter)?.subject ??
+				blockSubjects.find((s) => s.letter === "A")?.subject ??
+				blockSubjects[0]?.subject ??
+				"";
+			const strippedBlock = stripSubjectBlock(blockRaw)
+				.replace(/^\s*[-=]{3,}\s*/g, "")
+				.replace(/\n\s*[-=]{3,}\s*$/g, "");
+			return { subject, body: cleanBody(strippedBlock.trim()) };
+		});
+	}
+
+	const subjects = extractSubjectOptions(body);
+	const chosenSubject =
+		subjects.find((s) => s.letter === selectedSubjectLetter)?.subject ??
+		subjects[0]?.subject ??
+		"";
+	const subjectStrippedBody = stripSubjectBlock(body);
+
+	let sections: ParsedSection[];
+	if (VERSION_LONG_RE.test(subjectStrippedBody) || VERSION_SHORT_RE.test(subjectStrippedBody)) {
+		sections = parseLongShortVariants(subjectStrippedBody);
+	} else {
+		sections = [{ id: "single", label: "Content", body: subjectStrippedBody.trim() }];
+	}
+
+	const active = sections.find((s) => s.id === activeSectionId) ?? sections[0];
+	return active ? [{ subject: chosenSubject, body: cleanBody(active.body) }] : [];
+}
