@@ -37,8 +37,6 @@ export type StrategicAngle =
 export type GenerationMode = "account" | "persona";
 /** Persona-level only: buying role in the deal. */
 export type PersonaType = "champion" | "economic_buyer" | "influencer_user" | "blocker";
-/** Persona-level only: how this contact enters the sales motion. */
-export type PersonaEntrancePath = "bottoms_up" | "top_down" | "middle_out";
 
 export type SearceService =
 	| "general"
@@ -79,8 +77,6 @@ export interface GenerationInput {
 	personaLinkedInUrl: string;
 	/** Persona-level only: buying role in the deal. */
 	personaType?: PersonaType;
-	/** Persona-level only: how this contact enters the sales motion. */
-	personaEntrancePath?: PersonaEntrancePath;
 	region: string;
 	selectedService: SearceService | "";
 	selectedFormat: ContentFormat;

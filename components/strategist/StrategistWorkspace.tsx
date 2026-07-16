@@ -10,7 +10,7 @@ import type { GenerationMode } from "@/lib/types";
 
 const COPY: Record<GenerationMode, { title: string; description: string }> = {
 	account: {
-		title: "Content Generator",
+		title: "Account Level Generator",
 		description:
 			"Research target accounts, find proof points, and generate high-conversion outreach content.",
 	},

@@ -76,14 +76,12 @@ import {
 	PERSONA_TITLE_CATEGORIES,
 	personaTitlesByCategory,
 	PERSONA_TYPE_OPTIONS,
-	PERSONA_ENTRANCE_PATH_OPTIONS,
 } from "@/lib/persona-titles";
 import { getStrategicPrioritiesForIndustry } from "@/lib/strategic-priorities-index";
 import type {
 	ContentFormat,
 	EmailSequenceLength,
 	GenerationInput,
-	PersonaEntrancePath,
 	PersonaType,
 	SearceService,
 	SequenceCount,
@@ -581,7 +579,14 @@ export default function ConfigPanel() {
 								</FormField>
 
 								<div className="space-y-1.5">
-									<Label className="text-xs font-medium">Persona Type</Label>
+									<Label className="text-xs font-medium">
+										Their Buying Role (optional)
+									</Label>
+									<p className="text-[11px] text-muted-foreground">
+										Shapes this email&apos;s tone and call-to-action to match
+										how this person relates to the deal — e.g. an Economic Buyer
+										gets ROI/risk framing, a Champion gets a collaborative tone.
+									</p>
 									<div className="grid grid-cols-2 gap-2">
 										{PERSONA_TYPE_OPTIONS.map((opt) => (
 											<button
@@ -606,32 +611,6 @@ export default function ConfigPanel() {
 										))}
 									</div>
 								</div>
-
-								<FormField
-									icon={Target}
-									label="Entrance Path"
-									help="How this contact enters the sales motion — shapes whether the sequence is high-touch/multi-channel or a lighter single track."
-								>
-									<Select
-										value={input.personaEntrancePath ?? ""}
-										onValueChange={(v) =>
-											setInput({
-												personaEntrancePath: v as PersonaEntrancePath,
-											})
-										}
-									>
-										<SelectTrigger className="w-full">
-											<SelectValue placeholder="Select entrance path (optional)" />
-										</SelectTrigger>
-										<SelectContent>
-											{PERSONA_ENTRANCE_PATH_OPTIONS.map((opt) => (
-												<SelectItem key={opt.value} value={opt.value}>
-													{opt.label}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</FormField>
 							</fieldset>
 						</>
 					)}

@@ -324,7 +324,6 @@ ${
 - Title: ${input.targetPersonaJobTitle || "Not provided"}
 - LinkedIn: ${input.personaLinkedInUrl || "Not provided"}
 - Buying role: ${input.personaType ? input.personaType.replace(/_/g, " ") : "Not specified"}
-- Entrance path: ${input.personaEntrancePath ? input.personaEntrancePath.replace(/_/g, " ") : "Not specified"}
 Rules for persona-level: the greeting line itself stays "Hi [FirstName]," (a CRM merge tag — do not replace it or add a second greeting), but the very next line must open with the ONE cited signal from PERSON RESEARCH above (never a generic company-level trigger), and the ask/CTA should fit their buying role (a Champion gets a collaborative tone; an Economic Buyer gets ROI/risk framing; a Blocker gets a low-friction, risk-acknowledging tone).
 `
 		: ""

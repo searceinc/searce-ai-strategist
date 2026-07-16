@@ -23,7 +23,6 @@ const generationInputObjectSchema = z
 		personaType: z
 			.enum(["champion", "economic_buyer", "influencer_user", "blocker"])
 			.optional(),
-		personaEntrancePath: z.enum(["bottoms_up", "top_down", "middle_out"]).optional(),
 		region: z.string().min(1),
 		selectedService: z.string(),
 		selectedFormat: z.string().min(1),

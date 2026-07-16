@@ -91,7 +91,6 @@ export function migrateLegacyInput(raw: LegacyShape): GenerationInput {
 		personaName: raw.personaName ?? "",
 		personaLinkedInUrl: raw.personaLinkedInUrl ?? "",
 		personaType: raw.personaType,
-		personaEntrancePath: raw.personaEntrancePath,
 		region: raw.region ?? "",
 		selectedService: raw.selectedService ?? "",
 		selectedFormat: raw.selectedFormat ?? "cold_email",

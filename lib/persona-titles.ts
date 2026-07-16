@@ -85,9 +85,3 @@ export const PERSONA_TYPE_OPTIONS: { value: string; label: string; description: 
 		description: "Skeptical or has competing priorities; needs risk/status-quo addressed.",
 	},
 ];
-
-export const PERSONA_ENTRANCE_PATH_OPTIONS: { value: string; label: string }[] = [
-	{ value: "bottoms_up", label: "Bottoms-up (practitioner in)" },
-	{ value: "top_down", label: "Top-down (executive in)" },
-	{ value: "middle_out", label: "Middle-out (manager/director in)" },
-];
