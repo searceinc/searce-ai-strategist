@@ -28,13 +28,18 @@ const COPY: Record<GenerationMode, { title: string; description: string }> = {
  * component's only job is to keep `input.mode` in sync with the active route.
  */
 export default function StrategistWorkspace({ mode }: { mode: GenerationMode }) {
-	const { activeTab, setActiveTab, input, setInput } = useStrategistStore();
+	const { activeTab, setActiveTab, input, setInput, resetAll } = useStrategistStore();
 
+	// Switching between Account and Persona level is a hard context switch —
+	// clear the form, prospect upload, and any generated content/research
+	// rather than carrying it across, since the two levels target different
+	// things (a company vs. a named individual).
 	useEffect(() => {
 		if (input.mode !== mode) {
+			resetAll();
 			setInput({ mode });
 		}
-	}, [mode, input.mode, setInput]);
+	}, [mode, input.mode, setInput, resetAll]);
 
 	const copy = COPY[mode];
 

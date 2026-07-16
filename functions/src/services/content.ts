@@ -6,6 +6,13 @@ import { getIndustryMetrics } from "../data/industry-metrics.js";
 import { getSheetPainPoints } from "../data/pain-points.js";
 import { migrateLegacyInput } from "../data/legacy-codes.js";
 import { REGION_LABELS, INDUSTRY_LABELS } from "../data/labels.js";
+import {
+	getStrategicPriorityById,
+	matchStrategicPriority,
+	getPersonaMessaging,
+	getStrategicPriorityUseCases,
+	getStrategicPriorityCaseStudies,
+} from "../data/strategic-priorities.js";
 import { runResearch } from "./research.js";
 import { buildCorrectivePrompt, checkCompliance } from "./compliance.js";
 import { assembleSequence, assembleSingleEmail } from "./output-assembler.js";
@@ -21,6 +28,7 @@ import type {
 	FallbackPath,
 	GenerationInput,
 	ResearchSnapshot,
+	StrategicPriorityDisplay,
 	VerifiedCaseStudy,
 } from "../types.js";
 
@@ -61,8 +69,84 @@ export interface GenerationResult {
 	confidenceScore: number;
 	generatedContent: string;
 	transparencyNote: string | null;
+	strategicPriority?: StrategicPriorityDisplay | null;
 	featureNotAvailable?: boolean;
 	noMatchMessage?: string;
+}
+
+/**
+ * Resolve the "Strategic Priority" angle's grounding data for the current
+ * mode. Account mode uses the industry's account-level StrategicPriority
+ * (rep-selected or auto-matched by job title); Persona mode uses that
+ * persona's Buyer-Persona messaging, falling back to the account-level
+ * priority if no persona match exists for the industry.
+ */
+function resolveStrategicPriority(input: GenerationInput): StrategicPriorityDisplay | null {
+	if (input.strategicAngle !== "strategic_priority") return null;
+
+	if (input.mode === "persona") {
+		const messaging = getPersonaMessaging(
+			input.targetPersonaIndustry,
+			input.targetPersonaJobTitle,
+		);
+		if (messaging) {
+			return {
+				source: "persona_messaging",
+				title: `${messaging.personaTitle} — Strategic Priority`,
+				coreFocus: messaging.coreFocus,
+				painPoints: messaging.painPoints,
+				valueProps: messaging.valueProps,
+				proofPoints: messaging.proofPoints ?? [],
+				reachout: messaging.reachout,
+			};
+		}
+		// Fall through to the account-level priority if no persona match exists.
+	}
+
+	const priority = input.selectedStrategicPriorityId
+		? getStrategicPriorityById(input.targetPersonaIndustry, input.selectedStrategicPriorityId)
+		: matchStrategicPriority(input.targetPersonaIndustry, input.targetPersonaJobTitle);
+	if (!priority) return null;
+
+	return {
+		source: "strategic_priority",
+		title: priority.title,
+		headline: priority.headline,
+		coreFocus: priority.coreFocus,
+		painPoints: [priority.painPoints],
+		strategicPivot: priority.strategicPivot,
+		valueProps: priority.valueProps,
+		proofPoints: priority.proofPoints ?? [],
+		reachout: priority.reachout,
+	};
+}
+
+/**
+ * Supplementary use-case + case-study grounding for the "strategic_priority"
+ * angle — shared cross-cutting proof for BOTH account and persona levels
+ * (per the confirmed content→level mapping), on top of whatever
+ * REFERENCEABLE_STORIES match buildContentPrompt already injected.
+ */
+function buildStrategicPriorityGroundingBlock(industryCode: string): string {
+	const useCases = getStrategicPriorityUseCases(industryCode);
+	const caseStudies = getStrategicPriorityCaseStudies(industryCode);
+	if (useCases.length === 0 && caseStudies.length === 0) return "";
+
+	let block = "\n## STRATEGIC PRIORITY — SUPPLEMENTARY GROUNDING (use cases + case studies)\n";
+	if (useCases.length > 0) {
+		block += "Real Searce use cases for this industry (paraphrase, do not invent numbers):\n";
+		for (const uc of useCases.slice(0, 6)) {
+			block += `- ${uc.personaTitle}: ${uc.useCase} — solves "${uc.whatItSolves}" → ${uc.businessOutcome} (${uc.searceSolutionProof})\n`;
+		}
+	}
+	if (caseStudies.length > 0) {
+		block +=
+			"\nAdditional verified case studies for this industry (name the client in plain text only if it fits the Trust beat naturally — never more than one client per email):\n";
+		for (const cs of caseStudies.slice(0, 4)) {
+			block += `- ${cs.client} (${cs.practice}): ${cs.keyPainPoints} → ${cs.searceSolutions} → ${cs.proofPoints}\n`;
+		}
+	}
+	return block;
 }
 
 function computeConfidence(
@@ -97,6 +181,11 @@ export async function orchestrateGeneration(
 	// targetPersonaFunction / notes / MIC / NEU; normalize before anything else.
 	const input = migrateLegacyInput(rawInput) as GenerationInput;
 
+	// Resolved once, ahead of the case-study gate below, because the
+	// "strategic_priority" angle is self-grounding (its own pain point → pivot
+	// → value props → proof) and must be able to bypass that gate.
+	const strategicPriority = resolveStrategicPriority(input);
+
 	// ── Phase 1: Hardcoded data (instant) ──
 	const cloudContext = getCloudContext(input.cloudEcosystem);
 	const industryMetrics = getIndustryMetrics(input.targetPersonaIndustry);
@@ -119,7 +208,9 @@ export async function orchestrateGeneration(
 	);
 
 	// ── Early exit: no case studies and fallback disabled ──
-	if (caseStudies.length === 0 && !input.intelligentFallback) {
+	// Skipped when the "strategic_priority" angle resolved its own grounding —
+	// it doesn't depend on a REFERENCEABLE_STORIES match to be sufficient.
+	if (caseStudies.length === 0 && !input.intelligentFallback && !strategicPriority) {
 		const research = await runResearch(input, tavilyKey, geminiKey);
 		return {
 			research,
@@ -162,10 +253,19 @@ export async function orchestrateGeneration(
 		confidenceScore,
 		industryMetrics,
 		sheetPainPoints,
+		strategicPriority,
 	};
 
 	const systemPrompt = buildSystemPrompt(brief, cloudContext);
-	const userPrompt = buildContentPrompt(brief, cloudContext);
+	let userPrompt = buildContentPrompt(brief, cloudContext);
+
+	// Use cases + case studies are cross-cutting grounding for the
+	// "strategic_priority" angle across BOTH account and persona levels —
+	// supplement (never replace) the REFERENCEABLE_STORIES matcher already
+	// injected by buildContentPrompt.
+	if (strategicPriority) {
+		userPrompt += buildStrategicPriorityGroundingBlock(input.targetPersonaIndustry);
+	}
 
 	const generatedContent = await generateForFormat({
 		input,
@@ -187,6 +287,7 @@ export async function orchestrateGeneration(
 		confidenceScore,
 		generatedContent,
 		transparencyNote,
+		strategicPriority,
 	};
 }
 

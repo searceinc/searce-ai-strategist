@@ -24,7 +24,12 @@ export type EmailSequenceLength = 3 | 5 | 6;
 export type SequenceCount = 1 | 2 | 3 | 4 | 5;
 export type LinkedinInmailVariation = "1" | "2";
 
-export type StrategicAngle = "pain_point" | "roi_metrics" | "social_proof" | "direct_pitch";
+export type StrategicAngle =
+	| "pain_point"
+	| "roi_metrics"
+	| "social_proof"
+	| "direct_pitch"
+	| "strategic_priority";
 
 export type GenerationMode = "account" | "persona";
 export type PersonaType = "champion" | "economic_buyer" | "influencer_user" | "blocker";
@@ -73,6 +78,8 @@ export interface GenerationInput {
 	selectedService: SearceService | "";
 	selectedFormat: ContentFormat;
 	strategicAngle: StrategicAngle;
+	/** Used when strategicAngle is "strategic_priority"; empty = auto-match by job title. */
+	selectedStrategicPriorityId: string;
 	cloudEcosystem: string;
 	intelligentFallback: boolean;
 	/** Free-text directive that the model MUST follow (e.g. "make it short"). */
@@ -104,6 +111,14 @@ export interface TavilyResult {
 	content: string;
 	score: number;
 	published_date?: string;
+	/**
+	 * Full cleaned page text, present only when a search opts in via
+	 * `includeRawContent`. Server-only: consumed by the summarizer passes for
+	 * richer fact extraction, then stripped before results are persisted to
+	 * Firestore / returned to the client (see `runResearch`), since 12 sources
+	 * of full-page text would blow past the Firestore doc-size limit.
+	 */
+	raw_content?: string;
 }
 
 export interface TavilyResponse {
@@ -170,6 +185,25 @@ export interface ExternalSourceItem {
 	kind: "news" | "metric" | "pain" | "reference";
 }
 
+// ─── Strategic Priority (hardcoded, per-industry) ────────────────────────────
+
+/**
+ * Display shape for the "Strategic Priority" angle — mode-agnostic so both the
+ * account-level StrategicPriority and the persona-level PersonaMessaging (from
+ * data/strategic-priorities.ts) can populate the same feed tab and be persisted.
+ */
+export interface StrategicPriorityDisplay {
+	source: "strategic_priority" | "persona_messaging";
+	title: string;
+	headline?: string;
+	coreFocus: string;
+	painPoints: string[];
+	strategicPivot?: string;
+	valueProps: string[];
+	proofPoints: string[];
+	reachout: { hook: string; pivot: string; closer: string };
+}
+
 // ─── Case Study (hardcoded, verified) ────────────────────────────────────────
 
 export interface VerifiedCaseStudy {
@@ -218,4 +252,5 @@ export interface ContentBrief {
 	confidenceScore: number;
 	industryMetrics: string[];
 	sheetPainPoints: SheetPainPointBundle;
+	strategicPriority?: StrategicPriorityDisplay | null;
 }

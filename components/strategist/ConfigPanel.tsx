@@ -78,6 +78,7 @@ import {
 	PERSONA_TYPE_OPTIONS,
 	PERSONA_ENTRANCE_PATH_OPTIONS,
 } from "@/lib/persona-titles";
+import { getStrategicPrioritiesForIndustry } from "@/lib/strategic-priorities-index";
 import type {
 	ContentFormat,
 	EmailSequenceLength,
@@ -289,6 +290,9 @@ export default function ConfigPanel() {
 	const currentSubCategories = getSubCategoryOptions(
 		input.targetPersonaIndustry,
 		input.targetPersonaCategory,
+	);
+	const currentStrategicPriorities = getStrategicPrioritiesForIndustry(
+		input.targetPersonaIndustry,
 	);
 
 	/**
@@ -851,25 +855,48 @@ export default function ConfigPanel() {
 						/>
 
 						<div className="grid grid-cols-2 gap-2">
-							{STRATEGIC_ANGLES.map((angle) => (
-								<button
-									key={angle.value}
-									type="button"
-									onClick={() =>
-										setInput({ strategicAngle: angle.value as StrategicAngle })
-									}
-									className={`cursor-pointer rounded-md border-2 px-3 py-2.5 text-left transition-colors ${
-										input.strategicAngle === angle.value
-											? "border-primary bg-primary/10 text-primary"
-											: "border-border bg-background hover:bg-muted"
-									}`}
-								>
-									<p className="text-xs font-semibold">{angle.label}</p>
-									<p className="mt-0.5 text-[10px] text-muted-foreground">
-										{angle.description}
-									</p>
-								</button>
-							))}
+							{STRATEGIC_ANGLES.map((angle) => {
+								const isStrategicPriorityAngle =
+									angle.value === "strategic_priority";
+								const isDisabled =
+									isStrategicPriorityAngle &&
+									currentStrategicPriorities.length === 0;
+								return (
+									<button
+										key={angle.value}
+										type="button"
+										disabled={isDisabled}
+										title={
+											isDisabled
+												? "Not yet available for this industry"
+												: undefined
+										}
+										onClick={() =>
+											setInput({
+												strategicAngle: angle.value as StrategicAngle,
+											})
+										}
+										className={`rounded-md border-2 px-3 py-2.5 text-left transition-colors ${
+											isDisabled
+												? "cursor-not-allowed border-border bg-muted/40 opacity-50"
+												: "cursor-pointer"
+										} ${
+											!isDisabled && input.strategicAngle === angle.value
+												? "border-primary bg-primary/10 text-primary"
+												: !isDisabled
+													? "border-border bg-background hover:bg-muted"
+													: ""
+										}`}
+									>
+										<p className="text-xs font-semibold">{angle.label}</p>
+										<p className="mt-0.5 text-[10px] text-muted-foreground">
+											{isDisabled
+												? "Not yet available for this industry"
+												: angle.description}
+										</p>
+									</button>
+								);
+							})}
 						</div>
 					</fieldset>
 

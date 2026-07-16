@@ -26,7 +26,12 @@ export type SequenceCount = 1 | 2 | 3 | 4 | 5;
 /** LinkedIn InMail copy variant. */
 export type LinkedinInmailVariation = "1" | "2";
 
-export type StrategicAngle = "pain_point" | "roi_metrics" | "social_proof" | "direct_pitch";
+export type StrategicAngle =
+	| "pain_point"
+	| "roi_metrics"
+	| "social_proof"
+	| "direct_pitch"
+	| "strategic_priority";
 
 /** Account-level (generic company POV) vs persona-level (named individual). */
 export type GenerationMode = "account" | "persona";
@@ -80,6 +85,8 @@ export interface GenerationInput {
 	selectedService: SearceService | "";
 	selectedFormat: ContentFormat;
 	strategicAngle: StrategicAngle;
+	/** Used when strategicAngle is "strategic_priority"; empty = auto-match by job title. */
+	selectedStrategicPriorityId: string;
 	cloudEcosystem: string;
 	intelligentFallback: boolean;
 	/** Free-text directive that the model MUST follow (e.g. "make it short"). */
@@ -176,6 +183,25 @@ export function normalizeResearchSnapshot(
 	};
 }
 
+// ─── Strategic Priority (hardcoded, per-industry) ───────────────────────────
+
+/**
+ * Display shape for the "Strategic Priority" angle — mode-agnostic so both the
+ * account-level StrategicPriority and the persona-level PersonaMessaging (from
+ * functions/src/data/strategic-priorities.ts) can populate the same feed tab.
+ */
+export interface StrategicPriorityDisplay {
+	source: "strategic_priority" | "persona_messaging";
+	title: string;
+	headline?: string;
+	coreFocus: string;
+	painPoints: string[];
+	strategicPivot?: string;
+	valueProps: string[];
+	proofPoints: string[];
+	reachout: { hook: string; pivot: string; closer: string };
+}
+
 // ─── Case Study (hardcoded, verified) ───────────────────────────────────────
 
 export interface VerifiedCaseStudy {
@@ -210,6 +236,7 @@ export interface StrategistSession {
 	generatedContent: string;
 	editedContent: string;
 	transparencyNote: string | null;
+	strategicPriority?: StrategicPriorityDisplay | null;
 	exportCount: number;
 	saveCount: number;
 	isFavorite: boolean;
@@ -248,6 +275,7 @@ export interface GenerateContentResponse {
 	confidenceScore: number;
 	generatedContent: string;
 	transparencyNote: string | null;
+	strategicPriority?: StrategicPriorityDisplay | null;
 	featureNotAvailable?: boolean;
 	noMatchMessage?: string;
 }

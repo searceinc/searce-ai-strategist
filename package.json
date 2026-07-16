@@ -11,7 +11,8 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"build:referenceable-stories": "node scripts/build-referenceable-stories.mjs",
-		"extract:referenceable-stories": "node scripts/extract-referenceable-from-pdf.mjs"
+		"extract:referenceable-stories": "node scripts/extract-referenceable-from-pdf.mjs",
+		"build:strategic-priorities": "node scripts/build-strategic-priorities.mjs"
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.101.0",

@@ -8,6 +8,7 @@ import {
 	type GenerationInput,
 	type ResearchSnapshot,
 	type SessionSummary,
+	type StrategicPriorityDisplay,
 	type StrategistSession,
 	type VerifiedCaseStudy,
 } from "@/lib/types";
@@ -39,6 +40,7 @@ interface StrategistState {
 	generatedContent: string;
 	editedContent: string;
 	transparencyNote: string | null;
+	strategicPriority: StrategicPriorityDisplay | null;
 	generationError: string | null;
 
 	setGenerating: (v: boolean) => void;
@@ -83,6 +85,7 @@ export const useStrategistStore = create<StrategistState>((set) => ({
 	generatedContent: "",
 	editedContent: "",
 	transparencyNote: null,
+	strategicPriority: null,
 	generationError: null,
 
 	setGenerating: (v) => set({ isGenerating: v, generationError: null }),
@@ -96,6 +99,7 @@ export const useStrategistStore = create<StrategistState>((set) => ({
 			generatedContent: result.generatedContent,
 			editedContent: result.generatedContent,
 			transparencyNote: result.transparencyNote,
+			strategicPriority: result.strategicPriority ?? null,
 			isGenerating: false,
 			activeTab: "output",
 			input: { ...s.input, intelligenceFeedFocus: "" },
@@ -112,6 +116,7 @@ export const useStrategistStore = create<StrategistState>((set) => ({
 			generatedContent: "",
 			editedContent: "",
 			transparencyNote: null,
+			strategicPriority: null,
 			generationError: null,
 		}),
 
@@ -126,6 +131,7 @@ export const useStrategistStore = create<StrategistState>((set) => ({
 			generatedContent: session.generatedContent ?? "",
 			editedContent: session.editedContent || session.generatedContent || "",
 			transparencyNote: session.transparencyNote ?? null,
+			strategicPriority: session.strategicPriority ?? null,
 			isGenerating: false,
 			generationError: null,
 			activeTab: "output",
@@ -153,6 +159,7 @@ export const useStrategistStore = create<StrategistState>((set) => ({
 			generatedContent: "",
 			editedContent: "",
 			transparencyNote: null,
+			strategicPriority: null,
 			generationError: null,
 			activeTab: "config",
 		}),

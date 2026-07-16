@@ -253,6 +253,11 @@ export function confidenceColor(score: number): string {
 // ─── Strategic Angles ───────────────────────────────────────────────────────
 
 export const STRATEGIC_ANGLES: { value: StrategicAngle; label: string; description: string }[] = [
+	{
+		value: "strategic_priority",
+		label: "Strategic Priority",
+		description: "Industry priority — pain point + ROI + proof, combined",
+	},
 	{ value: "pain_point", label: "Pain Point", description: "Empathetic problem-first approach" },
 	{ value: "roi_metrics", label: "ROI / Metrics", description: "Data-driven value narrative" },
 	{ value: "social_proof", label: "Social Proof", description: "Case study-led storytelling" },

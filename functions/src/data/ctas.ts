@@ -14,6 +14,10 @@ interface AngleCTA {
 }
 
 const ANGLE_CTAS: Record<string, AngleCTA> = {
+	strategic_priority: {
+		primary: "Worth a quick look at how peers in your industry are tackling this?",
+		secondary: "Happy to send the priority brief we walked through.",
+	},
 	pain_point: {
 		primary: "Worth a 15-minute exchange of notes?",
 		secondary: "Happy to share the framework we used on a similar challenge.",

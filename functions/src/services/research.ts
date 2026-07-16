@@ -84,8 +84,10 @@ async function summarizeResearch(
 	if (sources.length === 0 && tavilyAnswers.length === 0) return null;
 
 	const corpus = sources
-		.slice(0, 15)
-		.map((s, i) => `[${i + 1}] ${s.title}\n${(s.content ?? "").slice(0, 600)}`)
+		.slice(0, 10)
+		.map(
+			(s, i) => `[${i + 1}] ${s.title}\n${(s.raw_content ?? s.content ?? "").slice(0, 2500)}`,
+		)
 		.join("\n\n");
 	const answerBlock = tavilyAnswers.length
 		? `Search-engine summaries:\n${tavilyAnswers.map((a) => `- ${a}`).join("\n")}\n\n`
@@ -159,7 +161,9 @@ async function summarizePersonaResearch(
 
 	const corpus = sources
 		.slice(0, 10)
-		.map((s, i) => `[${i + 1}] ${s.title}\n${(s.content ?? "").slice(0, 600)}`)
+		.map(
+			(s, i) => `[${i + 1}] ${s.title}\n${(s.raw_content ?? s.content ?? "").slice(0, 2500)}`,
+		)
 		.join("\n\n");
 
 	const prompt = `You are extracting person-specific facts for a personalized sales email to one named individual.
@@ -249,6 +253,7 @@ export async function runResearch(
 				maxResults: 5,
 				topic: "news",
 				days: 30,
+				includeRawContent: true,
 			}).catch(() => null),
 		);
 	} else if (isGeneralPov && domain) {
@@ -261,6 +266,7 @@ export async function runResearch(
 				maxResults: 5,
 				topic: "news",
 				days: 45,
+				includeRawContent: true,
 			}).catch(() => null),
 		);
 	} else {
@@ -272,6 +278,7 @@ export async function runResearch(
 				maxResults: 5,
 				topic: "news",
 				days: 45,
+				includeRawContent: true,
 			}).catch(() => null),
 		);
 	}
@@ -288,6 +295,7 @@ export async function runResearch(
 			maxResults: 5,
 			topic: "general",
 			timeRange: "month",
+			includeRawContent: true,
 		}).catch(() => null),
 	);
 
@@ -305,6 +313,7 @@ export async function runResearch(
 			maxResults: 5,
 			topic: "general",
 			timeRange: "year",
+			includeRawContent: true,
 		}).catch(() => null),
 	);
 
@@ -322,6 +331,61 @@ export async function runResearch(
 		}).catch(() => null),
 	);
 
+	// ── Searches 5-8: company social handles (social signal, per 2026-07-15 ask) ──
+	// Login walls are not the blocker here — Tavily's index already holds public
+	// LinkedIn/X/Instagram pages and returns full raw_content for them (verified
+	// via manual probes). Reddit has no "company page", so it searches for
+	// discussion/reviews instead of a profile. Only run when we have a concrete
+	// anchor to search for; skip (rather than break the positional destructuring
+	// below) otherwise.
+	const socialAnchor = companyName || (!isGeneralPov ? taxonomyPhrase : "");
+	searchPromises.push(
+		socialAnchor
+			? tavilySearch({
+					query: socialAnchor,
+					apiKey: tavilyKey,
+					searchDepth: "advanced",
+					maxResults: 2,
+					topic: "general",
+					includeDomains: ["linkedin.com"],
+					includeRawContent: true,
+				}).catch(() => null)
+			: Promise.resolve(null),
+		socialAnchor
+			? tavilySearch({
+					query: socialAnchor,
+					apiKey: tavilyKey,
+					searchDepth: "advanced",
+					maxResults: 2,
+					topic: "general",
+					includeDomains: ["x.com", "twitter.com"],
+					includeRawContent: true,
+				}).catch(() => null)
+			: Promise.resolve(null),
+		socialAnchor
+			? tavilySearch({
+					query: socialAnchor,
+					apiKey: tavilyKey,
+					searchDepth: "advanced",
+					maxResults: 2,
+					topic: "general",
+					includeDomains: ["instagram.com"],
+					includeRawContent: true,
+				}).catch(() => null)
+			: Promise.resolve(null),
+		socialAnchor
+			? tavilySearch({
+					query: `${socialAnchor} reviews OR experience OR discussion`,
+					apiKey: tavilyKey,
+					searchDepth: "advanced",
+					maxResults: 2,
+					topic: "general",
+					includeDomains: ["reddit.com"],
+					includeRawContent: true,
+				}).catch(() => null)
+			: Promise.resolve(null),
+	);
+
 	// ── Persona-level only: person-specific searches (run alongside, not ──
 	// mixed into the fixed-position searchPromises above, since they're
 	// conditional and would break the positional destructuring below).
@@ -337,6 +401,7 @@ export async function runResearch(
 				maxResults: 5,
 				topic: "general",
 				timeRange: "year",
+				includeRawContent: true,
 			}).catch(() => null),
 			tavilySearch({
 				query: `"${personaName}" LinkedIn OR conference OR whitepaper OR appointed OR promoted`,
@@ -344,13 +409,69 @@ export async function runResearch(
 				searchDepth: "advanced",
 				maxResults: 5,
 				topic: "general",
+				includeRawContent: true,
+			}).catch(() => null),
+			// Domain-scoped profile searches — target the person's actual
+			// profile/activity page directly on each platform, rather than relying
+			// on a platform name as a loose keyword in the general search above.
+			tavilySearch({
+				query: `"${personaName}" ${personaAnchor}`,
+				apiKey: tavilyKey,
+				searchDepth: "advanced",
+				maxResults: 2,
+				topic: "general",
+				includeDomains: ["linkedin.com"],
+				includeRawContent: true,
+			}).catch(() => null),
+			tavilySearch({
+				query: `"${personaName}" ${personaAnchor}`,
+				apiKey: tavilyKey,
+				searchDepth: "advanced",
+				maxResults: 2,
+				topic: "general",
+				includeDomains: ["x.com", "twitter.com"],
+				includeRawContent: true,
+			}).catch(() => null),
+			tavilySearch({
+				query: `"${personaName}" ${personaAnchor}`,
+				apiKey: tavilyKey,
+				searchDepth: "advanced",
+				maxResults: 2,
+				topic: "general",
+				includeDomains: ["instagram.com"],
+				includeRawContent: true,
+			}).catch(() => null),
+			tavilySearch({
+				query: `"${personaName}" ${personaAnchor}`,
+				apiKey: tavilyKey,
+				searchDepth: "advanced",
+				maxResults: 2,
+				topic: "general",
+				includeDomains: ["reddit.com"],
+				includeRawContent: true,
 			}).catch(() => null),
 		);
 	}
 
 	const [
-		[newsResults, trendResults, painPointResults, searceResults],
-		[personaInterviewResults, personaActivityResults],
+		[
+			newsResults,
+			trendResults,
+			painPointResults,
+			searceResults,
+			linkedinCompanyResults,
+			xCompanyResults,
+			instagramCompanyResults,
+			redditCompanyResults,
+		],
+		[
+			personaInterviewResults,
+			personaActivityResults,
+			personaLinkedinResults,
+			personaXResults,
+			personaInstagramResults,
+			personaRedditResults,
+		],
 	] = await Promise.all([Promise.all(searchPromises), Promise.all(personaSearchPromises)]);
 
 	// ── Extract news with URLs (company-specific OR industry pulse) ──
@@ -441,6 +562,22 @@ export async function runResearch(
 		}
 	}
 
+	// ── Merge company social-handle results as additional sources ──
+	for (const socialResult of [
+		linkedinCompanyResults,
+		xCompanyResults,
+		instagramCompanyResults,
+		redditCompanyResults,
+	]) {
+		if (!socialResult?.results?.length) continue;
+		for (const item of socialResult.results) {
+			if (!seenUrls.has(item.url)) {
+				seenUrls.add(item.url);
+				allSources.push(item);
+			}
+		}
+	}
+
 	allSources.sort((a, b) => b.score - a.score);
 
 	// ── Persona-level only: build Public Signals directly from raw Tavily ──
@@ -452,6 +589,10 @@ export async function runResearch(
 	for (const item of [
 		...(personaInterviewResults?.results ?? []),
 		...(personaActivityResults?.results ?? []),
+		...(personaLinkedinResults?.results ?? []),
+		...(personaXResults?.results ?? []),
+		...(personaInstagramResults?.results ?? []),
+		...(personaRedditResults?.results ?? []),
 	]) {
 		if (!item.url || personaSeenUrls.has(item.url)) continue;
 		personaSeenUrls.add(item.url);
@@ -556,7 +697,16 @@ export async function runResearch(
 		industryTrends: industryTrends.slice(0, 6),
 		painPoints: painPoints.slice(0, 6),
 		metrics: metrics.slice(0, 6),
-		sources: allSources.slice(0, 12),
+		// Strip raw_content before it leaves the server — it was only needed for
+		// the summarizer passes above. Persisting 12 full-page bodies would bloat
+		// the Firestore session doc (and the client never uses it).
+		sources: allSources.slice(0, 12).map((s) => ({
+			title: s.title,
+			url: s.url,
+			content: s.content,
+			score: s.score,
+			published_date: s.published_date,
+		})),
 		tavilyAnswer: newsResults?.answer ?? trendResults?.answer,
 		newsWithUrls,
 		metricsWithUrls,

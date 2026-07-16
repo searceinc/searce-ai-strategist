@@ -78,6 +78,7 @@ export const generateContent = onCall(
 					confidenceScore: result.confidenceScore,
 					generatedContent: "",
 					transparencyNote: null,
+					strategicPriority: null,
 				};
 			}
 
@@ -90,6 +91,7 @@ export const generateContent = onCall(
 				generatedContent: result.generatedContent,
 				editedContent: result.generatedContent,
 				transparencyNote: result.transparencyNote,
+				strategicPriority: result.strategicPriority ?? null,
 			});
 
 			return {
@@ -100,6 +102,7 @@ export const generateContent = onCall(
 				confidenceScore: result.confidenceScore,
 				generatedContent: result.generatedContent,
 				transparencyNote: result.transparencyNote,
+				strategicPriority: result.strategicPriority ?? null,
 			};
 		} catch (err) {
 			console.error("Generation failed:", err);
@@ -148,6 +151,7 @@ export const regenerateContent = onCall(
 				fallbackPath: result.fallbackPath,
 				confidenceScore: result.confidenceScore,
 				transparencyNote: result.transparencyNote,
+				strategicPriority: result.strategicPriority ?? null,
 			});
 
 			return {
@@ -158,6 +162,7 @@ export const regenerateContent = onCall(
 				confidenceScore: result.confidenceScore,
 				generatedContent: result.generatedContent,
 				transparencyNote: result.transparencyNote,
+				strategicPriority: result.strategicPriority ?? null,
 			};
 		} catch (err) {
 			console.error("Regeneration failed:", err);

@@ -20,6 +20,7 @@ export const DEFAULT_GENERATION_INPUT: GenerationInput = {
 	selectedService: "",
 	selectedFormat: "cold_email",
 	strategicAngle: "pain_point",
+	selectedStrategicPriorityId: "",
 	cloudEcosystem: "gcp",
 	intelligentFallback: true,
 	instructions: "",

@@ -49,6 +49,7 @@ Data pipeline scripts (`scripts/`) — regenerate the case-study catalog from th
 ```bash
 npm run extract:referenceable-stories   # master-deck PDF → scripts/referenceable-stories.csv
 npm run build:referenceable-stories     # CSV → functions/src/data/referenceable-stories.ts
+npm run build:strategic-priorities      # scripts/strategic-priorities.source.json → functions/src/data/strategic-priorities.ts + lib/strategic-priorities-index.ts
 ```
 
 No test runner is configured in this repo.
@@ -91,10 +92,28 @@ persona mode adds extra Tavily searches for the named contact (bio, quotes, care
    (`data/case-studies.ts` — region +50 / industry +40 / service +30 / cloud +10, min score 50, top 3).
    If no case study matches and "Intelligent Fallback" is off, generation short-circuits with
    `featureNotAvailable: true` rather than producing ungrounded content.
-2. **Live research** (`services/research.ts`): 4 parallel Tavily searches (company/industry news, trends+ROI,
-   pain points, Searce-scoped case-study search), plus 2 more when in persona mode. Raw results are
-   relevance-filtered through a cheap Gemini pass (`summarizeResearch`/`summarizePersonaResearch`) with a
-   regex/keyword fallback if that call fails.
+2. **Live research** (`services/research.ts`): 8 parallel Tavily searches in Account mode (company/industry
+   news, trends+ROI, pain points, Searce-scoped case-study search, plus 4 company social-handle searches —
+   LinkedIn, X/Twitter, Instagram, and a Reddit discussion/reviews search), plus 6 more in Persona mode
+   (interview/quote search, general activity/keyword search, and 4 domain-scoped profile searches — LinkedIn,
+   X/Twitter, Instagram, Reddit — for the named person). All social searches use `includeDomains` scoped to
+   the platform; Reddit's query differs (`"<anchor> reviews OR experience OR discussion"`, since Reddit has
+   no "company/profile page" the way the others do). The social searches were added after confirming
+   empirically that Tavily's index already holds public LinkedIn/X/Instagram/Reddit pages and returns full
+   content for them — **login walls are not a blocker for Tavily's retrieval**; the gap was simply that
+   nothing searched those domains before. **Caveat found during verification**: Tavily's `include_domains` is
+   a soft preference, not a hard filter — for niche/low-social-footprint targets (e.g. Searce itself on
+   Reddit) it can backfill with off-domain results instead of returning empty. Harmless in practice (backfill
+   results just get deduped against the other searches by URL), but means genuine novel social signal is
+   inconsistent for small B2B accounts; works well for entities with real social presence (verified against
+   Sundar Pichai for persona mode: real X profile + posts, real Reddit discussion threads). Instagram is
+   weakest for individuals without a public personal account (falls back to Wikipedia/blog-type results).
+   All non-Searce web searches opt into **deep extraction** (`includeRawContent: true` on `tavilySearch`) so
+   Tavily returns each page's full cleaned body (`raw_content`), not just the snippet. Raw results are
+   relevance-filtered through a cheap Gemini pass (`summarizeResearch`/`summarizePersonaResearch`, which read
+   `raw_content ?? content`, ~2500 chars/source) with a regex/keyword fallback if that call fails.
+   `raw_content` is **stripped from the returned `sources`** before persistence — it's summarizer-only, and
+   full-page bodies for every source would bloat the Firestore session doc.
 3. **Confidence score** (0–1): additive score in `computeConfidence` based on source count, whether live data
    was found, and case-study match quality. Surfaced to the rep as High/Medium/Low.
 4. **Prompt assembly + Gemini generation** (`prompts/templates.ts` builds system/user prompts from a
@@ -126,6 +145,30 @@ not something to hand-edit.
 `functions/src/data/legacy-codes.ts` translates old industry/persona-function codes from previously-saved
 sessions into current taxonomy — needed because `GenerationInput` shape has evolved and old Firestore
 documents/replays must still parse.
+
+### Strategic Priority angle (`strategicAngle: "strategic_priority"`)
+
+A 5th `StrategicAngle` (alongside pain_point/roi_metrics/social_proof/direct_pitch) that combines all three
+into one narrative, grounded in curated per-industry research transcribed from CES 2026 "Industry Messaging"
+docs. Shown in **both** Account and Persona modes (shared `STRATEGIC_ANGLES` selector in `lib/constants.ts`),
+but resolves different data per mode in `resolveStrategicPriority` (`functions/src/services/content.ts`):
+Account mode uses the industry's account-level `StrategicPriority` (rep-picked via the ConfigPanel
+sub-selector, bound to `selectedStrategicPriorityId`, or auto-matched by job title); Persona mode uses that
+persona's `PersonaMessaging`, falling back to the account-level priority if no persona match exists.
+
+- **Data**: `scripts/strategic-priorities.source.json` (hand-curated, human-verified transcription) →
+  `scripts/build-strategic-priorities.mjs` → `functions/src/data/strategic-priorities.ts` (full records +
+  resolvers: `getStrategicPriorities`, `getStrategicPriorityById`, `matchStrategicPriority`,
+  `getPersonaMessaging`) + `lib/strategic-priorities-index.ts` (lightweight client index for the
+  ConfigPanel sub-selector). Currently covers **MCM (Manufacturing)** only — a vertical-slice proof; other
+  industries need the same source → build-script treatment. Industries with no entry simply disable the
+  angle button in the UI ("Not yet available for this industry").
+- **Self-grounding**: this angle bypasses the `featureNotAvailable` early-exit in `orchestrateGeneration`
+  (no case-study match required) as long as a `StrategicPriority`/`PersonaMessaging` record resolved —
+  see the `!strategicPriority` condition on that gate.
+- **Display**: surfaced in the Intelligence Feed as a "Strategic Priority" tab (`ResearchPanel.tsx`),
+  becomes the default tab when present. Persisted on `StrategistSession`/`GenerateContentResponse` as
+  `strategicPriority: StrategicPriorityDisplay | null` (mode-agnostic shape shared by both data sources).
 
 ### HubSpot integration
 

@@ -96,6 +96,7 @@ export function migrateLegacyInput(raw: LegacyShape): GenerationInput {
 		selectedService: raw.selectedService ?? "",
 		selectedFormat: raw.selectedFormat ?? "cold_email",
 		strategicAngle: raw.strategicAngle ?? "pain_point",
+		selectedStrategicPriorityId: raw.selectedStrategicPriorityId ?? "",
 		cloudEcosystem: raw.cloudEcosystem ?? "gcp",
 		intelligentFallback: raw.intelligentFallback ?? true,
 		instructions,

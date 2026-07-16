@@ -13,6 +13,7 @@ import {
 	UserRound,
 	Quote,
 	Flame,
+	Target,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,7 @@ export default function ResearchPanel() {
 		caseStudyMatches: rawCaseStudies,
 		fallbackPath,
 		confidenceScore,
+		strategicPriority,
 		isGenerating,
 		input,
 		currentSessionId,
@@ -90,6 +92,7 @@ export default function ResearchPanel() {
 	const hasPain = painPointsWithUrls.length > 0;
 	const hasProof = caseStudyMatches.length > 0 || searceLinks.length > 0;
 	const hasExternal = externalSources.length > 0;
+	const hasStrategicPriority = !!strategicPriority;
 
 	const isPersonaMode = input.mode === "persona";
 	const personaBio = research.personaBio ?? "";
@@ -142,7 +145,13 @@ export default function ResearchPanel() {
 			</CardHeader>
 
 			<Tabs
-				defaultValue={isPersonaMode ? "profile" : "metrics"}
+				defaultValue={
+					hasStrategicPriority
+						? "strategic_priority"
+						: isPersonaMode
+							? "profile"
+							: "metrics"
+				}
 				className="flex min-h-0 w-full flex-1 flex-col overflow-hidden"
 			>
 				<div className="shrink-0 border-b px-3 pt-1">
@@ -150,6 +159,13 @@ export default function ResearchPanel() {
 						variant="line"
 						className="h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0 pb-1.5"
 					>
+						<TabsTrigger
+							value="strategic_priority"
+							className="text-xs"
+							disabled={!hasStrategicPriority}
+						>
+							Strategic Priority
+						</TabsTrigger>
 						{isPersonaMode && (
 							<>
 								<TabsTrigger
@@ -224,6 +240,103 @@ export default function ResearchPanel() {
 				</div>
 
 				<div className={feedScrollRegionClass}>
+					<TabsContent value="strategic_priority" className="m-0 mt-0">
+						<CardContent className="p-4">
+							<FeedSection icon={Target} title="Strategic priority">
+								{hasStrategicPriority && strategicPriority ? (
+									<div className="space-y-3">
+										<div className="rounded-lg border bg-background p-3">
+											<p className="text-sm font-bold text-foreground">
+												{strategicPriority.title}
+											</p>
+											{strategicPriority.headline && (
+												<p className="mt-1 text-sm italic leading-relaxed text-foreground/90">
+													{strategicPriority.headline}
+												</p>
+											)}
+											<p className="mt-2 text-xs text-muted-foreground">
+												{strategicPriority.coreFocus}
+											</p>
+										</div>
+										{strategicPriority.painPoints.length > 0 && (
+											<div className="rounded-lg border bg-background p-3">
+												<p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+													Pain point
+												</p>
+												{strategicPriority.painPoints.map((pp, i) => (
+													<p key={i} className="text-sm text-foreground">
+														{pp}
+													</p>
+												))}
+											</div>
+										)}
+										{strategicPriority.strategicPivot && (
+											<div className="rounded-lg border bg-background p-3">
+												<p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+													Strategic pivot
+												</p>
+												<p className="text-sm text-foreground">
+													{strategicPriority.strategicPivot}
+												</p>
+											</div>
+										)}
+										{strategicPriority.valueProps.length > 0 && (
+											<div className="rounded-lg border bg-background p-3">
+												<p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+													Value propositions
+												</p>
+												<ul className="list-disc space-y-1 pl-4">
+													{strategicPriority.valueProps.map((vp, i) => (
+														<li
+															key={i}
+															className="text-sm text-foreground"
+														>
+															{vp}
+														</li>
+													))}
+												</ul>
+											</div>
+										)}
+										{strategicPriority.proofPoints.length > 0 && (
+											<div className="rounded-lg border bg-background p-3">
+												<p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+													Proof points
+												</p>
+												{strategicPriority.proofPoints.map((pp, i) => (
+													<p key={i} className="text-sm text-foreground">
+														{pp}
+													</p>
+												))}
+											</div>
+										)}
+										<div className="rounded-lg border bg-background p-3">
+											<p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+												Reachout script
+											</p>
+											<p className="text-sm text-foreground">
+												<span className="font-semibold">Hook: </span>
+												{strategicPriority.reachout.hook}
+											</p>
+											<p className="mt-2 text-sm text-foreground">
+												<span className="font-semibold">Pivot: </span>
+												{strategicPriority.reachout.pivot}
+											</p>
+											<p className="mt-2 text-sm text-foreground">
+												<span className="font-semibold">Closer: </span>
+												{strategicPriority.reachout.closer}
+											</p>
+										</div>
+									</div>
+								) : (
+									<p className="text-xs text-muted-foreground">
+										Pick the &quot;Strategic Priority&quot; angle and generate
+										to see the industry research behind it.
+									</p>
+								)}
+							</FeedSection>
+						</CardContent>
+					</TabsContent>
+
 					{isPersonaMode && (
 						<>
 							<TabsContent value="profile" className="m-0 mt-0">

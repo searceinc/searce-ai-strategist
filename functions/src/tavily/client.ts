@@ -12,6 +12,14 @@ interface SearchOptions {
 	days?: number;
 	includeDomains?: string[];
 	excludeDomains?: string[];
+	/**
+	 * When true, Tavily also returns the full cleaned page text per result
+	 * (`raw_content`) instead of only the short snippet (`content`). Opt-in
+	 * per search — heavier payload + slower, so callers enable it only where
+	 * the extra grounding is worth it. Defaults to false to preserve prior
+	 * snippet-only behavior.
+	 */
+	includeRawContent?: boolean;
 }
 
 export async function tavilySearch({
@@ -24,6 +32,7 @@ export async function tavilySearch({
 	days,
 	includeDomains,
 	excludeDomains,
+	includeRawContent = false,
 }: SearchOptions): Promise<TavilyResponse> {
 	const body: Record<string, unknown> = {
 		query,
@@ -32,7 +41,7 @@ export async function tavilySearch({
 		search_depth: searchDepth,
 		max_results: maxResults,
 		topic,
-		include_raw_content: false,
+		include_raw_content: includeRawContent,
 	};
 
 	if (timeRange) body.time_range = timeRange;

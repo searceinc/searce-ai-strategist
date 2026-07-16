@@ -187,6 +187,7 @@ export function buildContentPrompt(brief: ContentBrief, cloudContext: CloudConte
 		confidenceScore,
 		industryMetrics,
 		sheetPainPoints,
+		strategicPriority,
 	} = brief;
 
 	const {
@@ -218,6 +219,26 @@ ${isGeneralPov ? "Industry Context (general POV)" : "Industry Context"}: ${indus
 
 	if (feedFocus) {
 		prompt += `\n## USER-SELECTED INTELLIGENCE FEED SIGNAL (highest priority)\nThe rep chose to **rewrite the email around this signal**. Make both \`longParagraphs\` and \`shortParagraphs\` clearly reflect it in the opening and body (paraphrase; do not paste URLs; no "Source:", "Case reference:", or citation lines). Weave it into the story the way a rep would say it aloud.\n\n${feedFocus}\n\n`;
+	}
+
+	if (strategicPriority) {
+		prompt += `\n## STRATEGIC PRIORITY (primary source for the "strategic_priority" angle — pain point + pivot + proof, combined)\n`;
+		prompt += `Title: ${strategicPriority.title}\n`;
+		if (strategicPriority.headline) prompt += `Headline: ${strategicPriority.headline}\n`;
+		prompt += `Core focus: ${strategicPriority.coreFocus}\n`;
+		if (strategicPriority.painPoints.length > 0) {
+			prompt += `Pain point: ${strategicPriority.painPoints.join(" ")}\n`;
+		}
+		if (strategicPriority.strategicPivot) {
+			prompt += `Strategic pivot (the solution frame): ${strategicPriority.strategicPivot}\n`;
+		}
+		if (strategicPriority.valueProps.length > 0) {
+			prompt += `Value propositions: ${strategicPriority.valueProps.slice(0, 3).join(" | ")}\n`;
+		}
+		if (strategicPriority.proofPoints.length > 0) {
+			prompt += `Proof points (paraphrase, do not invent beyond these): ${strategicPriority.proofPoints.join(" ")}\n`;
+		}
+		prompt += `Reachout tone — hook: "${strategicPriority.reachout.hook}"; pivot: "${strategicPriority.reachout.pivot}"; closer: "${strategicPriority.reachout.closer}"\n`;
 	}
 
 	if (input.mode === "persona") {
@@ -401,6 +422,15 @@ function sectorPhrase(industryName: string, input: ContentBrief["input"]): strin
 }
 
 const ANGLE_INSTRUCTIONS: Record<string, AngleBuilder> = {
+	strategic_priority: (industryName, input) => `
+## STRATEGIC ANGLE: STRATEGIC PRIORITY FOCUS — Industry Strategist
+- This angle combines pain point, ROI, and social proof into one narrative, grounded in the STRATEGIC PRIORITY block below (if present) — treat it as the primary source of the pain point, the pivot, and the proof, not a generic angle.
+- Open with the pain point exactly as framed in the STRATEGIC PRIORITY block for ${sectorPhrase(industryName, input)} — do not soften or genericize it.
+- Present the strategic pivot as the solution: move the reader from their current (low-maturity) state to the outcome the pivot describes.
+- Back it with ONE value proposition and, if present, a proof point / metric from the block — paraphrase, do not invent numbers beyond what's given.
+- Close using the reachout "closer" tone from the block, adapted to a soft, low-friction CTA (never a hard meeting ask).
+- If no STRATEGIC PRIORITY block is supplied, fall back to the standard pain-point + ROI + social-proof combination using the research and case studies below.`,
+
 	pain_point: (industryName, input) => `
 ## STRATEGIC ANGLE: PAIN POINT FOCUS — Empathetic Provocateur
 - Open with a hyper-specific pain a ${input.targetPersonaJobTitle || "senior leader"} in ${sectorPhrase(industryName, input)} ${INDUSTRY_LABELS[input.targetPersonaIndustry] ? "" : ""}faces this quarter.

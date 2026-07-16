@@ -28,8 +28,15 @@ const generationInputObjectSchema = z
 		selectedService: z.string(),
 		selectedFormat: z.string().min(1),
 		strategicAngle: z
-			.enum(["pain_point", "roi_metrics", "social_proof", "direct_pitch"])
+			.enum([
+				"pain_point",
+				"roi_metrics",
+				"social_proof",
+				"direct_pitch",
+				"strategic_priority",
+			])
 			.default("pain_point"),
+		selectedStrategicPriorityId: z.string().optional().default(""),
 		cloudEcosystem: z.string().optional().default("gcp"),
 		intelligentFallback: z.boolean().optional().default(true),
 		instructions: z.string().optional().default(""),
