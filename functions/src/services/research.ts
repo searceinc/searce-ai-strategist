@@ -699,13 +699,15 @@ export async function runResearch(
 		metrics: metrics.slice(0, 6),
 		// Strip raw_content before it leaves the server — it was only needed for
 		// the summarizer passes above. Persisting 12 full-page bodies would bloat
-		// the Firestore session doc (and the client never uses it).
+		// the Firestore session doc (and the client never uses it). Only emit
+		// published_date when present — Tavily omits it for general/social results,
+		// and an explicit `undefined` is rejected by the Firestore Admin SDK.
 		sources: allSources.slice(0, 12).map((s) => ({
 			title: s.title,
 			url: s.url,
 			content: s.content,
 			score: s.score,
-			published_date: s.published_date,
+			...(s.published_date !== undefined ? { published_date: s.published_date } : {}),
 		})),
 		tavilyAnswer: newsResults?.answer ?? trendResults?.answer,
 		newsWithUrls,
