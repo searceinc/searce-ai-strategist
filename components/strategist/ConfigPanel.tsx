@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import {
 	Building2,
 	Globe,
@@ -42,6 +43,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStrategistStore } from "@/lib/store/useStrategistStore";
+import { assetPath } from "@/lib/utils";
 import {
 	callGenerateContent,
 	callRegenerateContent,
@@ -810,13 +812,23 @@ export default function ConfigPanel() {
 									key={eco.value}
 									type="button"
 									onClick={() => setInput({ cloudEcosystem: eco.value })}
-									className={`flex-1 cursor-pointer rounded-md border-2 px-3 py-2 text-xs font-medium transition-colors ${
+									className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border-2 px-3 py-2 text-xs font-medium transition-colors ${
 										input.cloudEcosystem === eco.value
 											? "border-primary bg-primary text-primary-foreground"
 											: "border-border bg-background hover:bg-muted"
 									}`}
 								>
-									<span className="mr-1">{eco.icon}</span>
+									{"logoSrc" in eco ? (
+										<Image
+											src={assetPath(eco.logoSrc)}
+											alt=""
+											width={16}
+											height={16}
+											className="h-4 w-4 object-contain"
+										/>
+									) : (
+										<span>{eco.icon}</span>
+									)}
 									{eco.label}
 								</button>
 							))}

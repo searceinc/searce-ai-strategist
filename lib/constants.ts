@@ -80,8 +80,8 @@ export const SUB_CATEGORY_LABELS: Record<string, string> = (() => {
 // ─── Cloud Ecosystems ───────────────────────────────────────────────────────
 
 export const CLOUD_ECOSYSTEMS = [
-	{ value: "gcp", label: "Google Cloud", icon: "☁️" },
-	{ value: "aws", label: "AWS", icon: "🔶" },
+	{ value: "gcp", label: "Google Cloud", icon: "☁️", logoSrc: "/images/gcp-logo.svg" },
+	{ value: "aws", label: "AWS", icon: "🔶", logoSrc: "/images/aws-logo.svg" },
 	{ value: "multicloud", label: "Multi-Cloud", icon: "🌐" },
 ] as const;
 

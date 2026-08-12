@@ -14,10 +14,18 @@ const ALLOWED_EMAILS = new Set<string>([
 	"rushil.jariwala@searce.com",
 	"dhyey.shah@searce.com",
 	"manya.satbhaiya@searce.com",
-	"sambit.swain@searce.com",
+	"iniya.rathinavelu@searce.com",
 	"soumya.jakati@searce.com",
 	"zeal.gandhi@searce.com",
 	"prachi.dabhade@searce.com",
+	"ishita.jain@searce.com",
+	"mitali.vishwakarma@searce.com",
+	"parth.kaintura@searce.com",
+	"partha.das@searce.com",
+	"rashmi.kavali@searce.com",
+	"sagar.porwal@searce.com",
+	"gaurav.desai@searce.com",
+	"sidhartha.sharma@searce.com",
 ]);
 
 function isAllowed(email: string | null | undefined): boolean {
