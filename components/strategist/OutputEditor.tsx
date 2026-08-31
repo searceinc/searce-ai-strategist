@@ -32,7 +32,6 @@ import {
 	fetchUserSessions,
 	updateEditedContent,
 	incrementExportCount,
-	pushToHubspotDrafts,
 } from "@/lib/firebase/firestore";
 import { confidenceLabel } from "@/lib/constants";
 import { strategistPanelCardClass } from "@/lib/strategist-panel";
@@ -44,6 +43,7 @@ import {
 } from "@/lib/parse-generated-content";
 import { MarkdownText } from "@/lib/render-markdown";
 import { cn } from "@/lib/utils";
+import SendToHubspotDialog from "./SendToHubspotDialog";
 
 export default function OutputEditor() {
 	const {
@@ -63,9 +63,9 @@ export default function OutputEditor() {
 
 	const [copied, setCopied] = useState(false);
 	const [saving, setSaving] = useState(false);
-	const [pushingToHubspot, setPushingToHubspot] = useState(false);
 	const [editMode, setEditMode] = useState(false);
 	const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+	const [hubspotDialogOpen, setHubspotDialogOpen] = useState(false);
 	const [selectedSubjectLetter, setSelectedSubjectLetter] = useState<
 		"A" | "B" | "C" | "D" | null
 	>(null);
@@ -156,41 +156,17 @@ export default function OutputEditor() {
 		}
 	}, [currentSessionId, editedContent, user, setSessions]);
 
-	const handleSendToHubspot = useCallback(async () => {
-		const touches = extractExportTouches(editedContent, activeSectionId, selectedSubjectLetter);
-		if (touches.length === 0) {
+	// Opens the picker instead of pushing straight away: a sequence used to
+	// create one HubSpot draft per email on a single click.
+	const handleSendToHubspot = useCallback(() => {
+		if (
+			extractExportTouches(editedContent, activeSectionId, selectedSubjectLetter).length === 0
+		) {
 			toast.error("Nothing to send");
 			return;
 		}
-		setPushingToHubspot(true);
-		try {
-			const { created } = await pushToHubspotDrafts({
-				touches,
-				targetCompany: input.targetCompany,
-				format: input.selectedFormat,
-			});
-			created.forEach((draft, i) => {
-				toast.success(`Draft ${i + 1} of ${created.length} created in HubSpot`, {
-					description: "Unpublished — assign a contact and send from HubSpot.",
-					action: {
-						label: "Open",
-						onClick: () => window.open(draft.url, "_blank", "noopener"),
-					},
-				});
-			});
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : "Failed to send to HubSpot";
-			toast.error(msg);
-		} finally {
-			setPushingToHubspot(false);
-		}
-	}, [
-		editedContent,
-		activeSectionId,
-		selectedSubjectLetter,
-		input.targetCompany,
-		input.selectedFormat,
-	]);
+		setHubspotDialogOpen(true);
+	}, [editedContent, activeSectionId, selectedSubjectLetter]);
 
 	const handleRegenerate = useCallback(async () => {
 		if (!currentSessionId) return;
@@ -251,6 +227,10 @@ export default function OutputEditor() {
 	const activeSection = sections.find((s) => s.id === activeSectionId) ?? sections[0];
 	const isSequence = sections.length > 0 && sections.every((s) => s.id.startsWith("email-"));
 	const sequenceIndex = isSequence ? sections.findIndex((s) => s.id === activeSectionId) : -1;
+	// Recomputed on open rather than memoized on every keystroke of the raw editor.
+	const hubspotTouches = hubspotDialogOpen
+		? extractExportTouches(editedContent, activeSectionId, selectedSubjectLetter)
+		: [];
 
 	function gotoSequence(delta: number) {
 		if (!isSequence || sequenceIndex < 0) return;
@@ -418,13 +398,8 @@ export default function OutputEditor() {
 						size="sm"
 						className="ml-auto cursor-pointer"
 						onClick={handleSendToHubspot}
-						disabled={pushingToHubspot}
 					>
-						{pushingToHubspot ? (
-							<Loader2 className="size-3.5 animate-spin" />
-						) : (
-							<Send className="size-3.5" />
-						)}
+						<Send className="size-3.5" />
 						Send to HubSpot
 					</Button>
 
@@ -444,6 +419,15 @@ export default function OutputEditor() {
 					</Button>
 				</div>
 			</CardContent>
+
+			<SendToHubspotDialog
+				open={hubspotDialogOpen}
+				onOpenChange={setHubspotDialogOpen}
+				touches={hubspotTouches}
+				activeTouchIndex={isSequence ? Math.max(sequenceIndex, 0) : 0}
+				targetCompany={input.targetCompany}
+				format={input.selectedFormat}
+			/>
 		</Card>
 	);
 }
@@ -480,6 +464,17 @@ function StrategistNoteCard({ text }: { text: string }) {
 	);
 }
 
+/**
+ * True when the user has an active, non-empty text selection.
+ *
+ * Used to tell "clicked the card" apart from "finished drag-selecting text
+ * inside the card" — the mouseup of a drag-select also fires a click.
+ */
+function hasTextSelection(): boolean {
+	if (typeof window === "undefined") return false;
+	return (window.getSelection()?.toString().trim().length ?? 0) > 0;
+}
+
 function SubjectOptions({
 	subjects,
 	selected,
@@ -510,12 +505,30 @@ function SubjectOptions({
 				{subjects.map((opt) => {
 					const isActive = opt.letter === selected;
 					return (
-						<button
+						/*
+						 * Deliberately a div, not a button: reps need to drag-select the
+						 * subject and preview text to paste elsewhere, and a native
+						 * <button> makes its text unselectable in most browsers. The
+						 * click handler below ignores clicks that end a text selection,
+						 * so selecting no longer fires the subject switch.
+						 */
+						<div
 							key={opt.letter}
-							type="button"
-							onClick={() => onSelect(opt.letter)}
+							role="button"
+							tabIndex={0}
+							aria-pressed={isActive}
+							onClick={() => {
+								if (hasTextSelection()) return;
+								onSelect(opt.letter);
+							}}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									onSelect(opt.letter);
+								}
+							}}
 							className={cn(
-								"flex flex-col gap-1 rounded-lg border-2 p-2.5 text-left transition-colors cursor-pointer",
+								"flex select-text flex-col gap-1 rounded-lg border-2 p-2.5 text-left transition-colors cursor-pointer",
 								isActive
 									? "border-primary bg-primary/5"
 									: "border-border bg-background hover:bg-muted",
@@ -524,22 +537,22 @@ function SubjectOptions({
 							<div className="flex items-center gap-2">
 								<Badge
 									variant={isActive ? "default" : "secondary"}
-									className="size-5 justify-center rounded-full p-0 text-[10px] font-bold"
+									className="size-5 shrink-0 justify-center rounded-full p-0 text-[10px] font-bold"
 								>
 									{opt.letter}
 								</Badge>
-								<span className="text-sm font-medium leading-snug text-foreground">
+								<span className="select-text text-sm font-medium leading-snug text-foreground">
 									{opt.subject || (
 										<em className="text-muted-foreground">(no subject)</em>
 									)}
 								</span>
 							</div>
 							{opt.preview && (
-								<span className="text-xs leading-snug text-muted-foreground line-clamp-2 pl-7">
+								<span className="select-text text-xs leading-snug text-muted-foreground pl-7">
 									{opt.preview}
 								</span>
 							)}
-						</button>
+						</div>
 					);
 				})}
 			</div>

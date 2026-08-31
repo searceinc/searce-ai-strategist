@@ -10,6 +10,8 @@
 import { sanitizeBoldInText } from "../prompts/bold-rules.js";
 import type { SequenceResponse, SingleEmailResponse, SubjectOption } from "./output-schemas.js";
 import type { ContentFormat } from "../types.js";
+import { effectiveWordCap, type LengthOverride } from "./length-override.js";
+import { VALID_CASE_STUDY_PATHS } from "../data/case-study-urls.js";
 
 interface SingleEmailCaps {
 	longWordMax: number;
@@ -34,7 +36,12 @@ const MAX_PARAGRAPHS = 9;
 
 // ─── Public API ────────────────────────────────────────────────────────────
 
-export function assembleSingleEmail(resp: SingleEmailResponse, format: ContentFormat): string {
+export function assembleSingleEmail(
+	resp: SingleEmailResponse,
+	format: ContentFormat,
+	/** Set when the rep asked for a specific length in their instructions. */
+	lengthOverride: LengthOverride = { override: false },
+): string {
 	const sanitizedSubjects = sanitizeSubjects(resp.subjects);
 	const caps = singleEmailCaps(format);
 
@@ -43,7 +50,7 @@ export function assembleSingleEmail(resp: SingleEmailResponse, format: ContentFo
 			.slice(0, MAX_PARAGRAPHS)
 			.map((p) => sanitizeParagraph(p, format))
 			.filter(Boolean),
-		caps.longWordMax,
+		effectiveWordCap(caps.longWordMax, lengthOverride),
 	);
 
 	const shortParagraphs = enforceTotalWordCap(
@@ -79,6 +86,8 @@ export function assembleSingleEmail(resp: SingleEmailResponse, format: ContentFo
 export function assembleSequence(
 	resp: SequenceResponse,
 	format: ContentFormat = "email_sequence",
+	/** Set when the rep asked for a specific length in their instructions. */
+	lengthOverride: LengthOverride = { override: false },
 ): string {
 	const out: string[] = [];
 
@@ -89,7 +98,10 @@ export function assembleSequence(
 	for (let i = 0; i < emails.length; i++) {
 		const e = emails[i]!;
 		const isFinal = i === emails.length - 1 && emails.length >= 5;
-		const cap = isFinal ? SEQUENCE_FINAL_WORD_MAX : SEQUENCE_LONG_WORD_MAX;
+		const cap = effectiveWordCap(
+			isFinal ? SEQUENCE_FINAL_WORD_MAX : SEQUENCE_LONG_WORD_MAX,
+			lengthOverride,
+		);
 
 		const paragraphs = enforceParagraphLengths(
 			(e.paragraphs ?? [])
@@ -249,13 +261,27 @@ function stripNonSearceLinks(text: string): string {
 	});
 }
 
+/** Shapes only a case-study detail page uses: /cs-42-detail, /archive/cs-42-detail. */
+const CASE_STUDY_PATH_RE = /^(?:\/archive)?\/cs-\d+-detail$/;
+
 function isSearceUrl(url: string): boolean {
 	const trimmed = (url ?? "").trim();
 	if (!trimmed) return false;
 	try {
 		const parsed = new URL(trimmed);
 		const host = parsed.hostname.toLowerCase();
-		return host === "searce.com" || host.endsWith(".searce.com");
+		if (host !== "searce.com" && !host.endsWith(".searce.com")) return false;
+
+		// A host check alone is not enough. The model can invent a plausible
+		// "searce.com/cs-9999-detail", which used to pass straight through into
+		// the email as a dead link. Anything shaped like a case-study detail
+		// page must exist in the generated allowlist; other searce.com pages
+		// (the hub, service pages) are unaffected.
+		const path = parsed.pathname.replace(/\/+$/, "").toLowerCase();
+		if (CASE_STUDY_PATH_RE.test(path)) {
+			return VALID_CASE_STUDY_PATHS.has(path.replace(/^\/archive/, ""));
+		}
+		return true;
 	} catch {
 		return false;
 	}

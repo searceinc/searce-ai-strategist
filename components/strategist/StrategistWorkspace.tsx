@@ -14,6 +14,11 @@ const COPY: Record<GenerationMode, { title: string; description: string }> = {
 		description:
 			"Research target accounts, find proof points, and generate high-conversion outreach content.",
 	},
+	generic: {
+		title: "Generic / Segment Generator",
+		description:
+			"Upload a list of companies that share the same filters and generate one industry-level piece that works for all of them — no single account named.",
+	},
 	persona: {
 		title: "Persona Content Generator",
 		description:
@@ -60,7 +65,7 @@ export default function StrategistWorkspace({ mode }: { mode: GenerationMode }) 
 			 *   └──────────────────────────────────────────────────────────────┘
 			 */}
 			<div className="hidden lg:flex lg:flex-col lg:gap-6">
-				<div className="grid grid-cols-[380px_1fr] gap-6 h-[calc(100vh-12rem)]">
+				<div className="grid grid-cols-[minmax(420px,26vw)_1fr] gap-6 h-[calc(100vh-12rem)]">
 					<div className="min-h-0 min-w-0">
 						<ConfigPanel />
 					</div>

@@ -2,6 +2,20 @@ import type { TavilyResponse } from "../types.js";
 
 const TAVILY_API_URL = "https://api.tavily.com/search";
 
+/**
+ * Per-search wall-clock ceiling.
+ *
+ * Every call site wraps this in `.catch(() => null)`, which bounds *errors* but
+ * not *time* — before this, one hung Tavily request could eat the callable's
+ * whole 120s budget with no way to shed it. An abort surfaces as a rejection,
+ * so the existing null-handling already covers it: a slow search degrades to
+ * "that source returned nothing" instead of stalling the generation.
+ *
+ * Sized for `search_depth: "advanced"` + `include_raw_content`, the slowest
+ * combination we issue.
+ */
+const TAVILY_TIMEOUT_MS = 12_000;
+
 interface SearchOptions {
 	query: string;
 	apiKey: string;
@@ -53,6 +67,7 @@ export async function tavilySearch({
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(body),
+		signal: AbortSignal.timeout(TAVILY_TIMEOUT_MS),
 	});
 
 	if (!response.ok) {

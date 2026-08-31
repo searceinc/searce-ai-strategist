@@ -81,7 +81,17 @@ export const SUB_CATEGORY_LABELS: Record<string, string> = (() => {
 
 export const CLOUD_ECOSYSTEMS = [
 	{ value: "gcp", label: "Google Cloud", icon: "☁️", logoSrc: "/images/gcp-logo.svg" },
-	{ value: "aws", label: "AWS", icon: "🔶", logoSrc: "/images/aws-logo.svg" },
+	{
+		value: "aws",
+		label: "AWS",
+		icon: "🔶",
+		logoSrc: "/images/aws-logo.svg",
+		// The stock AWS mark is #252F3E — near-black, so it disappears on the dark
+		// theme's background and on the blue "selected" fill. The variant keeps the
+		// brand orange and only lightens the wordmark. Google's logo is multicolour
+		// and legible on both, so it needs no variant.
+		logoSrcDark: "/images/aws-logo-white.svg",
+	},
 	{ value: "multicloud", label: "Multi-Cloud", icon: "🌐" },
 ] as const;
 
@@ -216,6 +226,40 @@ export const SEARCE_SERVICES: { value: SearceService; label: string; description
 		description: "Workspace, app modernization, change management",
 	},
 ];
+
+/**
+ * Display name for a service. The stored values are historical keys that in
+ * several cases no longer match the label ("finops_cost_optimization" is shown
+ * as "Managed Services"), so never build a label by de-underscoring the value —
+ * that is what used to send the model "finops cost optimization" when the rep
+ * had picked "Managed Services".
+ *
+ * Unknown input is a rep-typed custom practice and is returned verbatim.
+ */
+export function serviceLabel(value: string): string {
+	const known = SEARCE_SERVICES.find((s) => s.value === value);
+	return known ? known.label : value;
+}
+
+/**
+ * Workspace route for a saved session's mode.
+ *
+ * Must cover every GenerationMode. This used to be a binary ternary
+ * (persona ? /strategist/persona : /strategist), which sent a generic session
+ * to the Account route — where StrategistWorkspace's mode-mismatch effect fires
+ * resetAll() and wipes the session that was just hydrated, so opening a saved
+ * session silently produced an empty form.
+ */
+export function routeForMode(mode: string | undefined): string {
+	switch (mode) {
+		case "persona":
+			return "/strategist/persona";
+		case "generic":
+			return "/strategist/generic";
+		default:
+			return "/strategist";
+	}
+}
 
 // ─── Regions ────────────────────────────────────────────────────────────────
 

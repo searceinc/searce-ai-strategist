@@ -28,8 +28,33 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { callGenerateContent, callRegenerateContent } from "@/lib/firebase/firestore";
 
-/** Tab body: tall minimum scroll area; grows with content if needed. */
-const feedScrollRegionClass = "min-h-[min(32rem,48dvh)] w-full overflow-y-auto overscroll-contain";
+/**
+ * Tab body: the feed's own scroll region.
+ *
+ * `min-h-0 flex-1` (not a `min-h-*` floor) is what makes this actually scroll —
+ * the region has to be bounded by the Card's max height before `overflow-y-auto`
+ * has anything to do. Deliberately NO `overscroll-behavior: contain`: that used
+ * to sit here and blocked scroll chaining, so a wheel over the feed never
+ * reached the page container (`<main class="overflow-auto">`) and the rep
+ * couldn't scroll the page up without moving the cursor out of the panel.
+ */
+const feedScrollRegionClass = "min-h-0 w-full flex-1 overflow-y-auto";
+
+/**
+ * Dedupe key for the Proof tab.
+ *
+ * These two lists used to be deduped on `url`, but every story and every static
+ * link pointed at the same case-studies hub — so the predicate was false for
+ * every static link and the whole VERIFIED_SEARCE_LINKS block silently vanished
+ * the moment there was a single match. Title is the only field that actually
+ * identifies a story, and it stays correct now that stories carry per-story URLs.
+ */
+function normalizeStoryKey(title: string): string {
+	return title
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim();
+}
 
 export default function ResearchPanel() {
 	const {
@@ -106,7 +131,7 @@ export default function ResearchPanel() {
 		<Card
 			className={cn(
 				strategistPanelCardClass,
-				"flex w-full min-h-[min(38rem,56dvh)] min-w-0 flex-col gap-2 overflow-hidden",
+				"flex w-full min-h-[min(38rem,56dvh)] max-h-[calc(100vh-8rem)] min-w-0 flex-col gap-2 overflow-hidden",
 			)}
 		>
 			<CardHeader className="shrink-0 border-b pb-2">
@@ -668,7 +693,11 @@ export default function ResearchPanel() {
 									{searceLinks
 										.filter(
 											(sl) =>
-												!caseStudyMatches.some((cs) => cs.url === sl.url),
+												!caseStudyMatches.some(
+													(cs) =>
+														normalizeStoryKey(cs.title) ===
+														normalizeStoryKey(sl.title),
+												),
 										)
 										.map((link, i) => (
 											<a
@@ -683,9 +712,11 @@ export default function ResearchPanel() {
 														<p className="truncate text-sm font-bold text-foreground">
 															{link.title}
 														</p>
-														<p className="mt-0.5 text-xs text-muted-foreground">
-															{link.metrics}
-														</p>
+														{link.metrics ? (
+															<p className="mt-0.5 text-xs text-muted-foreground">
+																{link.metrics}
+															</p>
+														) : null}
 													</div>
 													<Link2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
 												</div>

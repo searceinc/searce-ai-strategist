@@ -1,3 +1,4 @@
+import { ThinkingLevel } from "@google/genai";
 import { generateStructuredWithGemini, generateWithGemini } from "../gemini/client.js";
 import { buildSystemPrompt, buildContentPrompt } from "../prompts/templates.js";
 import { getVerifiedCaseStudies } from "../data/case-studies.js";
@@ -16,6 +17,7 @@ import {
 import { runResearch } from "./research.js";
 import { buildCorrectivePrompt, checkCompliance } from "./compliance.js";
 import { assembleSequence, assembleSingleEmail } from "./output-assembler.js";
+import { detectLengthOverride } from "./length-override.js";
 import {
 	SEQUENCE_SCHEMA,
 	SINGLE_EMAIL_SCHEMA,
@@ -58,6 +60,29 @@ function resolveSequenceCount(input: GenerationInput): number {
 	if (raw < 1) return 1;
 	if (raw > 5) return 5;
 	return raw;
+}
+
+/**
+ * Research placeholder for the no-case-study early exit, which returns before
+ * any Tavily call. Shaped so the Intelligence Feed renders its empty state
+ * rather than throwing on missing arrays.
+ */
+function emptyResearch(): ResearchSnapshot {
+	return {
+		companyContext: "",
+		industryTrends: [],
+		painPoints: [],
+		metrics: [],
+		sources: [],
+		newsWithUrls: [],
+		metricsWithUrls: [],
+		painPointsWithUrls: [],
+		externalSources: [],
+		isLiveData: false,
+		// Built per call, not at module scope — a module-level Date would freeze
+		// at cold start and every response would report the instance's boot time.
+		timestamp: new Date().toISOString(),
+	};
 }
 
 export interface GenerationResult {
@@ -172,10 +197,22 @@ function computeConfidence(
 	return Math.min(score, 1);
 }
 
+export interface OrchestrateOptions {
+	/**
+	 * A research snapshot from an earlier run of the *same* research inputs
+	 * (see services/research-fingerprint.ts). When supplied, the Tavily fan-out
+	 * and both summarizer passes are skipped entirely — this is what makes a
+	 * regenerate or an Intelligence-Feed refocus fast, and what stops each one
+	 * from re-spending 16-28 Tavily credits for identical results.
+	 */
+	reusedResearch?: ResearchSnapshot;
+}
+
 export async function orchestrateGeneration(
 	rawInput: GenerationInput,
 	tavilyKey: string,
 	geminiKey: string,
+	options: OrchestrateOptions = {},
 ): Promise<GenerationResult> {
 	// Legacy → canonical translation. Old session payloads may carry
 	// targetPersonaFunction / notes / MIC / NEU; normalize before anything else.
@@ -211,9 +248,12 @@ export async function orchestrateGeneration(
 	// Skipped when the "strategic_priority" angle resolved its own grounding —
 	// it doesn't depend on a REFERENCEABLE_STORIES match to be sufficient.
 	if (caseStudies.length === 0 && !input.intelligentFallback && !strategicPriority) {
-		const research = await runResearch(input, tavilyKey, geminiKey);
+		// Deliberately no research call here. This branch returns
+		// generatedContent: "" and the UI shows the no-match message, so running
+		// the Tavily fan-out plus both summarizers would burn ~16-28 credits and
+		// several seconds producing a snapshot nothing reads.
 		return {
-			research,
+			research: options.reusedResearch ?? emptyResearch(),
 			caseStudyMatches: [],
 			fallbackPath: "none" as FallbackPath,
 			usedFallback: false,
@@ -233,7 +273,8 @@ export async function orchestrateGeneration(
 			: "benchmark_only";
 
 	// ── Phase 2: Live research (async — Tavily) ──
-	const research = await runResearch(input, tavilyKey, geminiKey);
+	// Reused when the caller proved the research-shaping inputs are unchanged.
+	const research = options.reusedResearch ?? (await runResearch(input, tavilyKey, geminiKey));
 
 	// ── Phase 3: Compute confidence ──
 	const confidenceScore = computeConfidence(research, caseStudies, usedFallback);
@@ -333,10 +374,20 @@ async function generateForFormat({
 				model: "gemini-3.5-flash",
 				temperature: 0.4,
 				maxOutputTokens: 6144,
+				// LOW, not the client's MEDIUM default: the JSON Schema already
+				// pins the output shape, so the extra reasoning mostly burns
+				// latency and ~2000 tokens of the output budget (see the
+				// text-mode note below). The text-mode fallback keeps MEDIUM,
+				// where nothing enforces structure.
+				thinkingLevel: ThinkingLevel.LOW,
 				responseJsonSchema: SEQUENCE_SCHEMA,
 				validate: isSequenceResponse,
 			});
-			return assembleSequence(resp, input.selectedFormat);
+			return assembleSequence(
+				resp,
+				input.selectedFormat,
+				detectLengthOverride(input.instructions),
+			);
 		} catch (err) {
 			console.warn("Structured sequence generation failed; falling back to text mode.", err);
 			return textModeWithRetry({
@@ -357,10 +408,15 @@ async function generateForFormat({
 				model: "gemini-3.5-flash",
 				temperature: 0.4,
 				maxOutputTokens: 4096,
+				thinkingLevel: ThinkingLevel.LOW,
 				responseJsonSchema: SINGLE_EMAIL_SCHEMA,
 				validate: isSingleEmailResponse,
 			});
-			const assembled = assembleSingleEmail(resp, input.selectedFormat);
+			const assembled = assembleSingleEmail(
+				resp,
+				input.selectedFormat,
+				detectLengthOverride(input.instructions),
+			);
 			if (!singleEmailAssembledHasSubstance(assembled)) {
 				console.warn(
 					"Structured email body too thin after assembly; falling back to text mode.",

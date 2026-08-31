@@ -9,6 +9,7 @@
  */
 
 import type { ContentFormat, GenerationInput } from "../types.js";
+import { detectLengthOverride, effectiveWordCap } from "./length-override.js";
 
 export interface ComplianceResult {
 	ok: boolean;
@@ -75,6 +76,11 @@ export function checkCompliance(
 					selectedFormat: ContentFormat;
 				} & Partial<GenerationInput>)
 			: formatOrInput;
+
+	// When the rep explicitly asked for a length in "Instructions to Strategist",
+	// the word caps stop being a compliance failure — otherwise the corrective
+	// retry would fight the instruction the rep just gave.
+	const lengthOverride = detectLengthOverride(input.instructions);
 	const format = input.selectedFormat;
 	const sequenceCount = resolveSequenceCount(input);
 
@@ -98,7 +104,10 @@ export function checkCompliance(
 		} else {
 			emails.forEach((body, idx) => {
 				const isFinal = idx === emails.length - 1 && emails.length >= 5;
-				const cap = isFinal ? SEQUENCE_FINAL_WORD_MAX : SEQUENCE_LONG_WORD_MAX;
+				const cap = effectiveWordCap(
+					isFinal ? SEQUENCE_FINAL_WORD_MAX : SEQUENCE_LONG_WORD_MAX,
+					lengthOverride,
+				);
 				checkSingleEmailBody({
 					body,
 					label: `EMAIL ${idx + 1}`,
@@ -120,7 +129,7 @@ export function checkCompliance(
 			checkSingleEmailBody({
 				body: long,
 				label: "LONG",
-				wordMax: caps.longWordMax,
+				wordMax: effectiveWordCap(caps.longWordMax, lengthOverride),
 				out: reasons,
 			});
 		} else {
@@ -133,7 +142,7 @@ export function checkCompliance(
 			checkSingleEmailBody({
 				body: short,
 				label: "SHORT",
-				wordMax: caps.shortWordMax,
+				wordMax: effectiveWordCap(caps.shortWordMax, lengthOverride),
 				shortVariant: true,
 				out: reasons,
 			});

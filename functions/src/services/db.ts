@@ -19,6 +19,28 @@ export async function saveSession(
 	return ref.id;
 }
 
+/**
+ * The stored input + research snapshot for a session, used by regenerate to
+ * decide whether it can skip the Tavily fan-out. Returns null when the session
+ * is missing, belongs to someone else, or has no persisted research.
+ */
+export async function getSessionResearch(
+	sessionId: string,
+	userId: string,
+): Promise<{ input: Record<string, unknown>; research: Record<string, unknown> } | null> {
+	const snap = await db.collection("strategist_sessions").doc(sessionId).get();
+	if (!snap.exists) return null;
+
+	const data = snap.data();
+	if (!data || data.userId !== userId) return null;
+	if (!data.research || !data.input) return null;
+
+	return {
+		input: data.input as Record<string, unknown>,
+		research: data.research as Record<string, unknown>,
+	};
+}
+
 export async function updateSession(
 	sessionId: string,
 	data: Record<string, unknown>,

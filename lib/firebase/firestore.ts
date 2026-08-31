@@ -48,8 +48,16 @@ const saveProspectUploadFn = httpsCallable<{ upload: ParsedProspectUpload }, { u
 );
 
 const pushToHubspotDraftsFn = httpsCallable<
-	{ touches: { subject: string; body: string }[]; targetCompany: string; format: string },
-	{ created: { id: string; url: string }[] }
+	{
+		touches: { subject: string; body: string; preview?: string }[];
+		targetCompany: string;
+		format: string;
+	},
+	{
+		created: { id: string; url: string }[];
+		/** Touches HubSpot rejected; the rest still landed. */
+		failed?: { subject: string; error: string }[];
+	}
 >(functions, "pushToHubspotDrafts");
 
 export async function callGenerateContent(
@@ -82,10 +90,14 @@ export async function callSaveProspectUpload(upload: ParsedProspectUpload): Prom
 
 /** Creates one unpublished HubSpot draft email per touch. Rep-triggered only. */
 export async function pushToHubspotDrafts(payload: {
-	touches: { subject: string; body: string }[];
+	touches: { subject: string; body: string; preview?: string }[];
 	targetCompany: string;
 	format: string;
-}): Promise<{ created: { id: string; url: string }[] }> {
+}): Promise<{
+	created: { id: string; url: string }[];
+	/** Touches HubSpot rejected; absent on older deployments. */
+	failed?: { subject: string; error: string }[];
+}> {
 	const result = await pushToHubspotDraftsFn(payload);
 	return result.data;
 }

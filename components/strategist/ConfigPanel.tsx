@@ -10,6 +10,7 @@ import {
 	Briefcase,
 	MapPin,
 	Settings2,
+	ChevronDown,
 	FileText,
 	StickyNote,
 	Loader2,
@@ -43,7 +44,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStrategistStore } from "@/lib/store/useStrategistStore";
-import { assetPath } from "@/lib/utils";
+import { assetPath, cn } from "@/lib/utils";
 import {
 	callGenerateContent,
 	callRegenerateContent,
@@ -65,6 +66,7 @@ import {
 	LINKEDIN_INMAIL_VARIATION_OPTIONS,
 	NURTURE_TEMPLATE_OPTIONS,
 	SEARCE_SERVICES,
+	serviceLabel,
 	REGIONS,
 	INDUSTRIES,
 	getCategoryOptions,
@@ -85,7 +87,6 @@ import type {
 	EmailSequenceLength,
 	GenerationInput,
 	PersonaType,
-	SearceService,
 	SequenceCount,
 	StrategicAngle,
 } from "@/lib/types";
@@ -121,10 +122,43 @@ const stackedSelectTriggerClass =
 
 const stackedSelectItemClass = "items-start py-2";
 
+/**
+ * Starter CSV for the bulk upload. Columns match the headers
+ * lib/prospect-upload.ts detects; reps kept guessing at the shape.
+ *
+ * Built in the browser rather than linked from public/: a plain
+ * `<a href="/templates/...">` broke because this app is a static export with
+ * `trailingSlash: true` and an optional `NEXT_PUBLIC_BASE_PATH` (next.config.ts),
+ * and a raw href gets neither the base path nor the trailing-slash handling —
+ * so the link 404'd wherever the app wasn't served from the domain root. A Blob
+ * needs no network round-trip at all, so it also works before a deploy.
+ */
+const PROSPECT_TEMPLATE_FILENAME = "searce-strategist-prospect-list-template.csv";
+const PROSPECT_TEMPLATE_CSV = [
+	"Company Name,Website,LinkedIn URL",
+	"Acme Manufacturing,acme.com,https://www.linkedin.com/company/acme-manufacturing",
+	"Globex Retail,globex.com,https://www.linkedin.com/company/globex-retail",
+	"",
+].join("\n");
+
+function downloadProspectTemplate() {
+	const blob = new Blob([PROSPECT_TEMPLATE_CSV], { type: "text/csv;charset=utf-8" });
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement("a");
+	a.href = url;
+	a.download = PROSPECT_TEMPLATE_FILENAME;
+	document.body.appendChild(a);
+	a.click();
+	a.remove();
+	// Revoked on the next tick so the click has already been handled.
+	setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export default function ConfigPanel() {
 	const {
 		input,
 		setInput,
+		research,
 		isGenerating,
 		currentSessionId,
 		setGenerating,
@@ -167,14 +201,19 @@ export default function ConfigPanel() {
 	const canGenerate =
 		input.region.trim() &&
 		input.selectedService.trim() &&
-		(input.mode !== "persona" || input.personaName.trim());
+		(input.mode !== "persona" || input.personaName.trim()) &&
+		// Generic mode writes for a segment, so the audience roster replaces the
+		// single company as the thing that makes the output meaningful.
+		(input.mode !== "generic" || !!prospectUpload?.rows.length);
 
 	async function handleGenerate() {
 		if (!canGenerate) {
 			toast.error(
 				input.mode === "persona"
 					? "Please fill in Persona Name, Region and Service"
-					: "Please fill in Region and Service (Industry can be General)",
+					: input.mode === "generic"
+						? "Please fill in Region and Service, and upload the list of companies this content is for"
+						: "Please fill in Region and Service (Industry can be General)",
 			);
 			return;
 		}
@@ -246,6 +285,10 @@ export default function ConfigPanel() {
 			try {
 				const uploadId = await callSaveProspectUpload(parsed);
 				setProspectUpload({ ...parsed, uploadId });
+				// Recorded on the session so a rep can tell later which list a
+				// generic draft was written for. The names themselves never reach
+				// the model — only this id travels.
+				setInput({ prospectUploadId: uploadId });
 				toast.success(`Loaded ${parsed.rows.length} rows · ${labels}`);
 			} catch (saveErr) {
 				const msg = saveErr instanceof Error ? saveErr.message : "save failed";
@@ -283,6 +326,7 @@ export default function ConfigPanel() {
 
 	function handleClearUpload() {
 		clearProspectUpload();
+		setInput({ prospectUploadId: "" });
 		if (fileInputRef.current) fileInputRef.current.value = "";
 	}
 
@@ -309,6 +353,13 @@ export default function ConfigPanel() {
 			return manualInput;
 		}
 		const options = getColumnValues(prospectUpload.rows, field);
+		// A value that isn't one of the uploaded column's values — e.g. a website
+		// or LinkedIn URL that research resolved after Generate — would render as
+		// the placeholder inside a Select, making a field that IS set look empty.
+		// Fall back to the free-text input so the rep can actually see it.
+		if (value && !options.includes(value)) {
+			return manualInput;
+		}
 		return (
 			<Select value={value} onValueChange={(v) => handleProspectSelect(field, v)}>
 				<SelectTrigger className="w-full">
@@ -324,6 +375,13 @@ export default function ConfigPanel() {
 			</Select>
 		);
 	}
+
+	// True when the value on screen came from research rather than the rep. Used
+	// only to swap the help text — the rep can still edit it freely.
+	const autofilledDomain =
+		!!input.targetDomain && input.targetDomain === research?.resolvedDomain;
+	const autofilledLinkedIn =
+		!!input.targetLinkedInUrl && input.targetLinkedInUrl === research?.resolvedLinkedInUrl;
 
 	const matchedFieldLabels = prospectUpload
 		? PROSPECT_FIELDS.filter((f) => prospectUpload.matchedFields[f]).map(
@@ -362,49 +420,74 @@ export default function ConfigPanel() {
 					<fieldset className="space-y-3">
 						<legend className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 							<Building2 className="size-3.5" />
-							Company Intel
+							{input.mode === "generic" ? "Audience List" : "Company Intel"}
 						</legend>
 
-						<FormField icon={Building2} label="Company Name">
-							{renderCompanyField(
-								"company",
-								input.targetCompany,
-								"Select a company from your list",
-								<Input
-									placeholder="e.g. Acme Corp (optional)"
-									value={input.targetCompany}
-									onChange={(e) => setInput({ targetCompany: e.target.value })}
-								/>,
-							)}
-						</FormField>
+						{/* No single company in generic mode — the roster is the target. */}
+						{input.mode !== "generic" && (
+							<>
+								<FormField icon={Building2} label="Company Name">
+									{renderCompanyField(
+										"company",
+										input.targetCompany,
+										"Select a company from your list",
+										<Input
+											placeholder="e.g. Acme Corp (optional)"
+											value={input.targetCompany}
+											onChange={(e) =>
+												setInput({ targetCompany: e.target.value })
+											}
+										/>,
+									)}
+								</FormField>
 
-						<FormField icon={Globe} label="Website / Domain">
-							{renderCompanyField(
-								"website",
-								input.targetDomain,
-								"Select a website from your list",
-								<Input
-									placeholder="e.g. acmecorp.com"
-									value={input.targetDomain}
-									onChange={(e) => setInput({ targetDomain: e.target.value })}
-								/>,
-							)}
-						</FormField>
-
-						<FormField icon={Link2} label="LinkedIn URL">
-							{renderCompanyField(
-								"linkedin",
-								input.targetLinkedInUrl,
-								"Select a LinkedIn URL from your list",
-								<Input
-									placeholder="e.g. linkedin.com/company/acme"
-									value={input.targetLinkedInUrl}
-									onChange={(e) =>
-										setInput({ targetLinkedInUrl: e.target.value })
+								<FormField
+									icon={Globe}
+									label="Website / Domain"
+									help={
+										autofilledDomain
+											? "Found via research after you hit Generate — worth a glance before it goes into outbound."
+											: "Leave blank and we'll try to find it from the company's LinkedIn page when you generate."
 									}
-								/>,
-							)}
-						</FormField>
+								>
+									{renderCompanyField(
+										"website",
+										input.targetDomain,
+										"Select a website from your list",
+										<Input
+											placeholder="e.g. acmecorp.com"
+											value={input.targetDomain}
+											onChange={(e) =>
+												setInput({ targetDomain: e.target.value })
+											}
+										/>,
+									)}
+								</FormField>
+
+								<FormField
+									icon={Link2}
+									label="LinkedIn URL"
+									help={
+										autofilledLinkedIn
+											? "Found via research after you hit Generate — open it once to confirm it's the right company."
+											: "Leave blank and we'll look it up when you generate. We never guess a LinkedIn slug — a wrong one looks real until a prospect clicks it."
+									}
+								>
+									{renderCompanyField(
+										"linkedin",
+										input.targetLinkedInUrl,
+										"Select a LinkedIn URL from your list",
+										<Input
+											placeholder="e.g. linkedin.com/company/acme"
+											value={input.targetLinkedInUrl}
+											onChange={(e) =>
+												setInput({ targetLinkedInUrl: e.target.value })
+											}
+										/>,
+									)}
+								</FormField>
+							</>
+						)}
 
 						{/* ── Divider ── */}
 						<div className="relative flex items-center justify-center py-0.5">
@@ -438,6 +521,11 @@ export default function ConfigPanel() {
 											{prospectUpload.rows.length} rows ·{" "}
 											{matchedFieldLabels.join(", ")}
 											{prospectUpload.uploadId ? "" : " · saving…"}
+										</p>
+										<p className="text-[10px] leading-snug text-muted-foreground">
+											Pick one account from the Company Name dropdown below —
+											its website and LinkedIn fill in automatically. One
+											account is generated at a time.
 										</p>
 									</div>
 									<Button
@@ -495,7 +583,14 @@ export default function ConfigPanel() {
 								</Button>
 								<p className="text-[10px] leading-snug text-muted-foreground">
 									Include columns for Account Name, Website and LinkedIn — headers
-									are matched automatically.
+									are matched automatically, and any extra columns are ignored.{" "}
+									<button
+										type="button"
+										onClick={downloadProspectTemplate}
+										className="cursor-pointer font-medium text-primary underline underline-offset-2"
+									>
+										Download template
+									</button>
 								</p>
 							</div>
 						)}
@@ -711,7 +806,7 @@ export default function ConfigPanel() {
 								</FormField>
 							)}
 
-						{input.mode !== "persona" && (
+						{input.mode === "account" && (
 							<FormField
 								icon={User}
 								label="Job Title"
@@ -774,25 +869,12 @@ export default function ConfigPanel() {
 							icon={Settings2}
 							label="Service"
 							required
-							help="Which Searce practice you want to position. The AI is constrained to claim only what we've actually delivered for this combination — never invented capabilities."
+							help="Pick a Searce practice or type your own — anything not in the list is passed to the AI verbatim. A practice with no case studies (e.g. SecOps) still works; proof just comes from region + industry instead."
 						>
-							<Select
+							<ServiceCombobox
 								value={input.selectedService}
-								onValueChange={(v) =>
-									setInput({ selectedService: v as SearceService })
-								}
-							>
-								<SelectTrigger className="w-full">
-									<SelectValue placeholder="Select service" />
-								</SelectTrigger>
-								<SelectContent>
-									{SEARCE_SERVICES.map((s) => (
-										<SelectItem key={s.value} value={s.value}>
-											{s.label}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
+								onChange={(v) => setInput({ selectedService: v })}
+							/>
 						</FormField>
 					</fieldset>
 
@@ -819,13 +901,31 @@ export default function ConfigPanel() {
 									}`}
 								>
 									{"logoSrc" in eco ? (
-										<Image
-											src={assetPath(eco.logoSrc)}
-											alt=""
-											width={16}
-											height={16}
-											className="h-4 w-4 object-contain"
-										/>
+										<>
+											<Image
+												src={assetPath(eco.logoSrc)}
+												alt=""
+												width={16}
+												height={16}
+												className={
+													"logoSrcDark" in eco
+														? // Hidden in dark mode AND when selected — the
+															// selected pill is a solid blue fill, which the
+															// dark wordmark also disappears against.
+															`h-4 w-4 object-contain dark:hidden ${input.cloudEcosystem === eco.value ? "hidden" : "block"}`
+														: "h-4 w-4 object-contain"
+												}
+											/>
+											{"logoSrcDark" in eco && (
+												<Image
+													src={assetPath(eco.logoSrcDark)}
+													alt=""
+													width={16}
+													height={16}
+													className={`h-4 w-4 object-contain dark:block ${input.cloudEcosystem === eco.value ? "block" : "hidden"}`}
+												/>
+											)}
+										</>
 									) : (
 										<span>{eco.icon}</span>
 									)}
@@ -1212,6 +1312,99 @@ function FormField({
 				)}
 			</Label>
 			{children}
+		</div>
+	);
+}
+
+/**
+ * Service picker: one control, not two.
+ *
+ * Reps asked for a single field — a dropdown *and* a separate "custom service"
+ * input meant guessing which one to use. This is a plain text input with a
+ * chevron that opens the known practices, filtered by whatever is typed. Picking
+ * an option stores its canonical value (e.g. `cloud_modernization`); typing
+ * stores the raw text, which the backend resolves via SERVICE_SYNONYMS and
+ * otherwise passes to the model verbatim.
+ */
+function ServiceCombobox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+	const [open, setOpen] = useState(false);
+	const wrapRef = useRef<HTMLDivElement>(null);
+
+	// Known values are stored as keys but shown as labels ("Managed Services",
+	// not "finops_cost_optimization").
+	const display = SEARCE_SERVICES.some((s) => s.value === value) ? serviceLabel(value) : value;
+
+	useEffect(() => {
+		if (!open) return;
+		function onDocMouseDown(e: MouseEvent) {
+			if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+		}
+		document.addEventListener("mousedown", onDocMouseDown);
+		return () => document.removeEventListener("mousedown", onDocMouseDown);
+	}, [open]);
+
+	const query = display.trim().toLowerCase();
+	const matches = SEARCE_SERVICES.filter(
+		(s) => !query || s.label.toLowerCase().includes(query) || s.value === value,
+	);
+
+	return (
+		<div ref={wrapRef} className="relative">
+			<Input
+				value={display}
+				placeholder="Select or type a service"
+				onChange={(e) => {
+					onChange(e.target.value);
+					setOpen(true);
+				}}
+				onFocus={() => setOpen(true)}
+				onKeyDown={(e) => {
+					if (e.key === "Escape") setOpen(false);
+				}}
+				className="pr-8"
+				role="combobox"
+				aria-expanded={open}
+				aria-autocomplete="list"
+			/>
+			<button
+				type="button"
+				tabIndex={-1}
+				aria-label={open ? "Hide services" : "Show services"}
+				onClick={() => setOpen((v) => !v)}
+				className="absolute inset-y-0 right-0 flex w-8 cursor-pointer items-center justify-center text-muted-foreground"
+			>
+				<ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+			</button>
+
+			{open && matches.length > 0 && (
+				<ul
+					role="listbox"
+					className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md"
+				>
+					{matches.map((s) => (
+						<li key={s.value}>
+							<button
+								type="button"
+								role="option"
+								aria-selected={s.value === value}
+								onClick={() => {
+									onChange(s.value);
+									setOpen(false);
+								}}
+								className={cn(
+									"w-full cursor-pointer rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent",
+									s.value === value && "bg-accent",
+								)}
+							>
+								<span className="block font-medium">{s.label}</span>
+								<span className="block text-xs text-muted-foreground">
+									{s.description}
+								</span>
+							</button>
+						</li>
+					))}
+				</ul>
+			)}
 		</div>
 	);
 }

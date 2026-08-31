@@ -1,6 +1,6 @@
 import type { ContentBrief } from "../types.js";
 import type { CloudContext } from "../data/cloud-context.js";
-import { INDUSTRY_LABELS, REGION_LABELS } from "../data/labels.js";
+import { INDUSTRY_LABELS, REGION_LABELS, serviceLabel } from "../data/labels.js";
 import { resolveTaxonomyLabels } from "../data/pain-points.js";
 import { getAngleCTA } from "../data/ctas.js";
 import { getStoryById } from "../data/case-studies.js";
@@ -25,6 +25,10 @@ export function buildSystemPrompt(brief: ContentBrief, cloudContext: CloudContex
 
 	const isGeneralPov = !input.targetPersonaIndustry || input.targetPersonaIndustry === "GENERAL";
 	const isGeneralService = !input.selectedService || input.selectedService === "general";
+	// Segment mode: written for a roster of companies sharing filters, and
+	// personalised to none of them. Distinct from isGeneralPov, which means
+	// "no specific industry" — here the industry is precisely the anchor.
+	const isSegment = input.mode === "generic";
 
 	const caseStudyRefs =
 		caseStudies.length > 0
@@ -40,7 +44,7 @@ export function buildSystemPrompt(brief: ContentBrief, cloudContext: CloudContex
 		sheetPainPoints.relevantPractices.length > 0
 			? sheetPainPoints.relevantPractices.join(", ")
 			: isGeneralService
-				? "Any verified Searce practice that is genuinely a fit — pick from: Applied AI, Data & Analytics, Infrastructure Modernization, Cloud Managed Services, Location Intelligence, Future of Work. Choose the ONE practice the research best supports; never list all of them; never invent capabilities."
+				? "Any verified Searce practice that is genuinely a fit — pick from: Applied AI, Data & Analytics, Cloud Modernisation, Software Engineering, Managed Services, Location Intelligence, Future of Work, SecOps. Choose the ONE practice the research best supports; never list all of them; never invent capabilities."
 				: "(use only practices the model can ground in the supplied case studies — never invent capabilities)";
 
 	const angleInstruction =
@@ -54,6 +58,19 @@ export function buildSystemPrompt(brief: ContentBrief, cloudContext: CloudContex
 - Lean on industry-agnostic outcomes Searce has actually delivered (cloud, data, AI, location, managed services, future of work) when a verified case fits the prospect's situation.
 - Speak about pain points and ROI in **general business language** (margin, time-to-decision, operational drag, customer experience) rather than vertical jargon.
 - It is OK to write to a "senior leader" if no title is given. Never invent a department.
+`
+		: "";
+
+	const segmentBlock = isSegment
+		? `
+## SEGMENT MODE (this email goes to MANY companies, not one)
+- This is written for a **class of companies** that share an industry, region and service need — the rep sends the same copy to every one of them.
+- **You do not know which company will read it.** You have not been given their names and must not guess, infer, or invent one.
+- **Override the Trigger beat:** you cannot observe a specific company, so anchor beat 1 on a **sector-wide** signal instead — an industry shift, a regulatory change, a pattern common to this sub-industry. Never write a detail that implies you researched one reader's business, because you didn't.
+- **Override "one person talking to one person" only in scope, not in voice.** Still write like a human to a human; just make the "you" a role in this sector rather than one named account.
+- **Merge tokens are encouraged here** (unlike single-account mode): \`[Company name]\` and \`[Industry name]\` are the right tool, since the rep merges each recipient's details at send time. Use \`[Company name]\` at most once per version, and only where it reads naturally.
+- Never write "your team at X", never name a customer of theirs, never reference their specific tooling or headcount.
+- The Trust beat is unchanged: a real Searce client, named in plain text, is still the proof.
 `
 		: "";
 
@@ -99,7 +116,7 @@ ${allowedPractices}
 
 ## VERIFIED CASE STUDIES (only proof you may name)
 ${caseStudyRefs}
-${generalPovBlock}${generalServiceBlock}
+${generalPovBlock}${segmentBlock}${generalServiceBlock}
 
 ## INLINE LINKING RULES (HARD) — NO LINKS
 - This build has **no per-story case-study URLs**, so **do NOT hyperlink anything**. Name the verified client in **plain text** (e.g. *Kogta* or *Rebel Foods*) as your third-party proof. Never invent or guess a URL.
@@ -161,12 +178,13 @@ Sub-industry / Category: ${isGeneralPov ? "—" : sheetPainPoints.categoryLabel 
 Sub-Category: ${isGeneralPov ? "—" : sheetPainPoints.subCategoryLabel || "—"}
 Title: ${input.targetPersonaJobTitle || `Senior leader${isGeneralPov ? "" : ` in ${sheetPainPoints.categoryLabel || industryName}`}`}
 Region: ${REGION_LABELS[input.region] ?? input.region}${input.targetCompany ? `\nCompany: ${input.targetCompany}` : ""}
-Service in scope: ${isGeneralService ? "General Searce capabilities — pick the ONE practice the research best supports" : (input.selectedService?.replace(/_/g, " ") ?? "Not specified")}
+Service in scope: ${isGeneralService ? "General Searce capabilities — pick the ONE practice the research best supports" : serviceLabel(input.selectedService) || "Not specified"}
 
 ## URL RULES
-- Searce case study URLs follow https://www.searce.com/archive/cs-[ID]-detail
-- General hub: https://www.searce.com/insights/case-studies
-- NEVER fabricate URLs. If you don't have a URL, don't link.
+- The ONLY Searce URLs you may use are ones printed verbatim elsewhere in this brief.
+- Never construct a case-study URL from an ID or a pattern. There is no cs-[ID] slug you can guess — inventing one produces a dead link that looks real.
+- General hub (always safe): https://www.searce.com/insights/case-studies
+- NEVER fabricate URLs. If you don't have a URL, name the client in prose and don't link.
 
 ## QUALITY BAR
 1. Every word earns its place. No filler.
@@ -313,7 +331,7 @@ ${input.targetLinkedInUrl ? `- LinkedIn: ${input.targetLinkedInUrl}` : ""}
 - Sub-Category: ${isGeneralPov ? "—" : subCategoryName || "—"}
 - Job Title: ${input.targetPersonaJobTitle || "Senior leader (generic)"}
 - Region: ${REGION_LABELS[input.region] ?? input.region}
-- Searce Service in scope: ${isGeneralService ? "General — pick ONE practice that the research + verified case studies justify" : (input.selectedService?.replace(/_/g, " ") ?? "Not specified")}
+- Searce Service in scope: ${isGeneralService ? "General — pick ONE practice that the research + verified case studies justify" : serviceLabel(input.selectedService) || "Not specified"}
 - Cloud Ecosystem: ${input.cloudEcosystem.toUpperCase()} (${cloudContext.partnerStatus})
 - Strategic Angle: ${input.strategicAngle.replace(/_/g, " ")}
 ${
@@ -327,7 +345,18 @@ ${
 Rules for persona-level: the greeting line itself stays "Hi [FirstName]," (a CRM merge tag — do not replace it or add a second greeting), but the very next line must open with the ONE cited signal from PERSON RESEARCH above (never a generic company-level trigger), and the ask/CTA should fit their buying role (a Champion gets a collaborative tone; an Economic Buyer gets ROI/risk framing; a Blocker gets a low-friction, risk-acknowledging tone).
 `
 		: ""
-}`;
+}${
+		input.mode === "generic"
+			? `
+## AUDIENCE PROFILE (segment-level — ONE email sent to MANY companies)
+- Shared industry: ${industryName}${categoryName ? ` — ${categoryName}` : ""}
+- Shared region: ${REGION_LABELS[input.region] ?? input.region}
+- Shared service need: ${isGeneralService ? "General — pick the ONE practice the research best supports" : serviceLabel(input.selectedService)}
+- Reader: a ${input.targetPersonaJobTitle || "senior leader"} at any company in that segment.
+Rules for segment-level: you have NOT been told which companies are on the list and must never name, guess or imply one. Anchor the Trigger on a sector-wide signal, not a company-specific observation. \`[Company name]\` is available as a merge token the rep fills at send time — use it at most once per version, only where it reads naturally, and never invent a real company name in its place.
+`
+			: ""
+	}`;
 
 	if (caseStudies.length > 0) {
 		prompt += `\n## VERIFIED CASE STUDIES (real referenceable Searce clients — use ONE as your 4T "Third-Party Credibility" beat)\n`;
@@ -453,12 +482,12 @@ const ANGLE_INSTRUCTIONS: Record<string, AngleBuilder> = {
 
 	direct_pitch: (industryName, input) => {
 		const isGeneralService = !input.selectedService || input.selectedService === "general";
-		const serviceLabel = isGeneralService
+		const serviceInScope = isGeneralService
 			? "the single Searce practice the live research best supports"
-			: (input.selectedService?.replace(/_/g, " ") ?? "starting point");
+			: serviceLabel(input.selectedService) || "starting point";
 		return `
 ## STRATEGIC ANGLE: DIRECT PITCH FOCUS — Confident Authority
-- Open on a sharp **Trigger** (no fluff preamble), then move quickly to ${serviceLabel} for ${sectorPhrase(industryName, input)}.
+- Open on a sharp **Trigger** (no fluff preamble), then move quickly to ${serviceInScope} for ${sectorPhrase(industryName, input)}.
 - Be specific: the practice in scope, a realistic timeline, and the kind of impact a ${input.targetPersonaJobTitle || "leader"} would care about — still framed through the 4T arc.
 - One sentence of "we've done this before", naming the client in plain text. Don't oversell.
 - Close on a soft, low-friction **Talk** question — confident, never a hard meeting ask.`;

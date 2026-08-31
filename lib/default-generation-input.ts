@@ -14,6 +14,7 @@ export const DEFAULT_GENERATION_INPUT: GenerationInput = {
 	targetPersonaSubCategory: "",
 	targetPersonaJobTitle: "",
 	mode: "account",
+	prospectUploadId: "",
 	personaName: "",
 	personaLinkedInUrl: "",
 	region: "",

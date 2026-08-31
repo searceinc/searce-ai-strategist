@@ -14,6 +14,7 @@ import { normalizeGenerationInput } from "@/lib/default-generation-input";
 import { cn } from "@/lib/utils";
 import HistoryCard from "./HistoryCard";
 import type { SessionSummary } from "@/lib/types";
+import { routeForMode } from "@/lib/constants";
 
 export default function ContentHistoryList() {
 	const { user } = useAuthStore();
@@ -21,7 +22,7 @@ export default function ContentHistoryList() {
 	const router = useRouter();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [tab, setTab] = useState<"all" | "favorites">("all");
-	const [modeFilter, setModeFilter] = useState<"all" | "account" | "persona">("all");
+	const [modeFilter, setModeFilter] = useState<"all" | "account" | "persona" | "generic">("all");
 
 	const favorites = useMemo(() => sessions.filter((s) => s.isFavorite), [sessions]);
 
@@ -56,9 +57,7 @@ export default function ContentHistoryList() {
 				const store = useStrategistStore.getState();
 				store.setInput(normalizeGenerationInput(session.input));
 				store.hydrateFromSavedSession(session);
-				router.push(
-					session.input?.mode === "persona" ? "/strategist/persona" : "/strategist",
-				);
+				router.push(routeForMode(session.input?.mode));
 			} catch {
 				toast.error("Failed to open session");
 			}
@@ -119,7 +118,7 @@ export default function ContentHistoryList() {
 			</div>
 
 			<div className="flex gap-1.5">
-				{(["all", "account", "persona"] as const).map((m) => (
+				{(["all", "account", "persona", "generic"] as const).map((m) => (
 					<button
 						key={m}
 						type="button"

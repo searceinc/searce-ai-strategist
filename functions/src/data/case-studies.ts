@@ -94,18 +94,75 @@ export function getVerifiedCaseStudies(
 	return { studies: [], usedFallback: false };
 }
 
+/**
+ * Free text the rep can type into the Service combobox, mapped to the canonical
+ * service key used to match stories.
+ *
+ * The dropdown only lists practices that exist in the services sheet, so a rep
+ * after something like SecOps types it by hand. Without this, "SecOps" /
+ * "Sec Ops" / "Security Operations" are three different strings that match no
+ * story at all. Searce sells SecOps under Managed Services, so it resolves there.
+ */
+const SERVICE_SYNONYMS: Record<string, string> = {
+	secops: "finops_cost_optimization",
+	"sec ops": "finops_cost_optimization",
+	"security operations": "finops_cost_optimization",
+	"cloud security": "finops_cost_optimization",
+	"security operations centre": "finops_cost_optimization",
+	"security operations center": "finops_cost_optimization",
+	soc: "finops_cost_optimization",
+	"managed services": "finops_cost_optimization",
+	"cloud managed services": "finops_cost_optimization",
+	cybersecurity: "finops_cost_optimization",
+	"cyber security": "finops_cost_optimization",
+};
+
+/**
+ * Canonical service key for matching. Known values pass through; rep-typed text
+ * is normalized (case/punctuation-insensitive) and resolved via SERVICE_SYNONYMS.
+ * Unrecognized text returns as-is and simply matches no story — proof then comes
+ * from region + industry, which is the intended degrade.
+ */
+export function canonicalServiceKey(service: string): string {
+	const raw = (service ?? "").trim();
+	if (!raw) return "";
+	const normalized = raw
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim();
+	return SERVICE_SYNONYMS[normalized] ?? raw;
+}
+
+/**
+ * Service keys that should also match stories tagged under a sibling practice.
+ *
+ * Managed Services and SecOps share a bucket. Inert today — BOTH buckets are
+ * empty in the story catalog — but wired so matching lights up the moment
+ * SecOps/Managed Services rows land in scripts/referenceable-stories.csv.
+ */
+const SERVICE_MATCH_GROUPS: Record<string, readonly string[]> = {
+	finops_cost_optimization: ["finops_cost_optimization", "secops"],
+};
+
+/** Every story-side service tag that should count as a hit for `service`. */
+function serviceMatchSet(service: string): readonly string[] {
+	return SERVICE_MATCH_GROUPS[service] ?? [service];
+}
+
 function scoreAndFilter(
 	industryCode: string,
 	region: string,
 	cloudEcosystem: string,
 	service: string,
 ): VerifiedCaseStudy[] {
-	const wantsService = !!service && service !== "general";
+	const canonical = canonicalServiceKey(service);
+	const wantsService = !!canonical && canonical !== "general";
+	const acceptedServices = serviceMatchSet(canonical);
 	return REFERENCEABLE_STORIES.map((story) => {
 		let score = 0;
 		if (story.region === region) score += 50;
 		if (migrateIndustryCode(story.industryCode) === industryCode) score += 40;
-		if (wantsService && story.service === service) score += 30;
+		if (wantsService && acceptedServices.includes(story.service)) score += 30;
 		if (story.cloudProvider === cloudEcosystem || story.cloudProvider === "multicloud") {
 			score += 10;
 		}

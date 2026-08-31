@@ -17,6 +17,24 @@
 	--color-blue-250: #e4efff;
 	--color-blue-100: #f2f7ff;
 
+	/*
+	 * Neutral surface ramp. Surfaces (page, cards, borders, inputs) are neutral;
+	 * the blues above are reserved for brand accents — primary buttons, focus
+	 * rings, charts. Previously every surface was a saturated blue, which made
+	 * light mode look tinted and dark mode glare (a #001630 navy page).
+	 */
+	--color-ink-950: #0e1014;
+	--color-ink-900: #16181d;
+	--color-ink-800: #1e2127;
+	--color-ink-700: #23272e;
+	--color-ink-600: #2a2f36;
+	--color-ink-500: #5b636d;
+	--color-ink-400: #9aa3ad;
+	--color-ink-300: #c8cdd3;
+	--color-ink-200: #e4e7ea;
+	--color-ink-100: #f4f5f7;
+	--color-ink-50: #fafbfc;
+
 	/* Custom breakpoints - use rem for consistency (1rem = 16px) */
 	--breakpoint-3xl: 120rem;
 	/* 1920px = 120rem */
@@ -27,72 +45,74 @@
 }
 
 :root {
-	--background: var(--color-blue-100);
-	--foreground: var(--color-blue-900);
-	--card: var(--color-blue-100);
-	--card-foreground: var(--color-blue-900);
-	--popover: var(--color-blue-100);
-	--popover-foreground: var(--color-blue-900);
+	--background: #ffffff;
+	--foreground: var(--color-ink-900);
+	--card: #ffffff;
+	--card-foreground: var(--color-ink-900);
+	--popover: #ffffff;
+	--popover-foreground: var(--color-ink-900);
 	--primary: var(--color-blue-750);
-	--primary-foreground: var(--color-blue-100);
-	--secondary: var(--color-blue-200);
-	--secondary-foreground: var(--color-blue-900);
-	--muted: var(--color-blue-200);
-	--muted-foreground: var(--color-blue-900);
-	--accent: var(--color-blue-200);
-	--accent-foreground: var(--color-blue-900);
-	--destructive: var(--color-blue-900);
-	--border: var(--color-blue-200);
-	--input: var(--color-blue-200);
+	--primary-foreground: #ffffff;
+	--secondary: var(--color-ink-100);
+	--secondary-foreground: var(--color-ink-900);
+	--muted: var(--color-ink-100);
+	--muted-foreground: var(--color-ink-500);
+	--accent: var(--color-ink-100);
+	--accent-foreground: var(--color-ink-900);
+	--destructive: #dc2626;
+	--border: var(--color-ink-200);
+	--input: var(--color-ink-200);
 	--ring: var(--color-blue-750);
 	--chart-1: var(--color-blue-750);
-	--chart-2: var(--color-blue-200);
-	--chart-3: var(--color-blue-200);
-	--chart-4: var(--color-blue-200);
+	--chart-2: var(--color-blue-600);
+	--chart-3: var(--color-blue-400);
+	--chart-4: var(--color-blue-300);
 	--chart-5: var(--color-blue-200);
 	--radius: 0.625rem;
-	--sidebar: var(--color-blue-100);
-	--sidebar-foreground: var(--color-blue-900);
+	--sidebar: var(--color-ink-50);
+	--sidebar-foreground: var(--color-ink-900);
 	--sidebar-primary: var(--color-blue-750);
-	--sidebar-primary-foreground: var(--color-blue-100);
-	--sidebar-accent: var(--color-blue-200);
-	--sidebar-accent-foreground: var(--color-blue-900);
-	--sidebar-border: var(--color-blue-200);
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: var(--color-ink-100);
+	--sidebar-accent-foreground: var(--color-ink-900);
+	--sidebar-border: var(--color-ink-200);
 	--sidebar-ring: var(--color-blue-750);
 }
 
 .dark {
-	--background: var(--color-blue-900);
-	--foreground: var(--color-blue-100);
-	--card: var(--color-blue-800);
-	--card-foreground: var(--color-blue-100);
-	--popover: var(--color-blue-800);
-	--popover-foreground: var(--color-blue-100);
-	--primary: var(--color-blue-500);
-	--primary-foreground: var(--color-blue-900);
-	--secondary: var(--color-blue-800);
-	--secondary-foreground: var(--color-blue-100);
-	--muted: var(--color-blue-800);
-	--muted-foreground: var(--color-blue-300);
-	--accent: var(--color-blue-800);
-	--accent-foreground: var(--color-blue-100);
+	/* Near-black neutral, not navy. Foreground is #e6e8ec rather than pure white
+	 * so long reading passages don't glare. */
+	--background: var(--color-ink-950);
+	--foreground: #e6e8ec;
+	--card: var(--color-ink-900);
+	--card-foreground: #e6e8ec;
+	--popover: var(--color-ink-900);
+	--popover-foreground: #e6e8ec;
+	--primary: #4d94ff;
+	--primary-foreground: var(--color-ink-950);
+	--secondary: var(--color-ink-800);
+	--secondary-foreground: #e6e8ec;
+	--muted: var(--color-ink-800);
+	--muted-foreground: var(--color-ink-400);
+	--accent: var(--color-ink-700);
+	--accent-foreground: #e6e8ec;
 	--destructive: #f87171;
-	--border: var(--color-blue-700);
-	--input: var(--color-blue-700);
-	--ring: var(--color-blue-500);
-	--chart-1: var(--color-blue-500);
+	--border: var(--color-ink-600);
+	--input: var(--color-ink-600);
+	--ring: #4d94ff;
+	--chart-1: #4d94ff;
 	--chart-2: var(--color-blue-400);
-	--chart-3: var(--color-blue-600);
-	--chart-4: var(--color-blue-700);
-	--chart-5: var(--color-blue-800);
-	--sidebar: var(--color-blue-900);
-	--sidebar-foreground: var(--color-blue-100);
-	--sidebar-primary: var(--color-blue-500);
-	--sidebar-primary-foreground: var(--color-blue-900);
-	--sidebar-accent: var(--color-blue-800);
-	--sidebar-accent-foreground: var(--color-blue-100);
-	--sidebar-border: var(--color-blue-700);
-	--sidebar-ring: var(--color-blue-500);
+	--chart-3: var(--color-blue-300);
+	--chart-4: var(--color-blue-500);
+	--chart-5: var(--color-blue-600);
+	--sidebar: var(--color-ink-900);
+	--sidebar-foreground: #e6e8ec;
+	--sidebar-primary: #4d94ff;
+	--sidebar-primary-foreground: var(--color-ink-950);
+	--sidebar-accent: var(--color-ink-700);
+	--sidebar-accent-foreground: #e6e8ec;
+	--sidebar-border: var(--color-ink-600);
+	--sidebar-ring: #4d94ff;
 }
 
 @theme inline {

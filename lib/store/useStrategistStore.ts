@@ -102,7 +102,16 @@ export const useStrategistStore = create<StrategistState>((set) => ({
 			strategicPriority: result.strategicPriority ?? null,
 			isGenerating: false,
 			activeTab: "output",
-			input: { ...s.input, intelligenceFeedFocus: "" },
+			input: {
+				...s.input,
+				intelligenceFeedFocus: "",
+				// Backfill only what the rep left blank. Research resolves the
+				// company's real LinkedIn page and website; a value the rep typed
+				// themselves is always authoritative and must never be clobbered.
+				targetDomain: s.input.targetDomain || (result.research?.resolvedDomain ?? ""),
+				targetLinkedInUrl:
+					s.input.targetLinkedInUrl || (result.research?.resolvedLinkedInUrl ?? ""),
+			},
 		})),
 	setEditedContent: (content) => set({ editedContent: content }),
 	setGenerationError: (error) => set({ generationError: error, isGenerating: false }),

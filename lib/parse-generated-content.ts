@@ -480,6 +480,16 @@ function recoveredBody(value: unknown): string {
 export interface ExportTouch {
 	subject: string;
 	body: string;
+	/** Inbox preview line for the chosen subject variant. */
+	preview: string;
+	/** Human label for the Send-to-HubSpot picker, e.g. "Email 2" or "Long". */
+	label: string;
+	/**
+	 * Every subject/preview variant available for this touch, so the rep can
+	 * switch variant per email in the picker instead of being stuck with
+	 * whichever chip happened to be active in the editor.
+	 */
+	subjectOptions: SubjectOption[];
 }
 
 /**
@@ -515,23 +525,25 @@ export function extractExportTouches(
 			const next = headers[i + 1];
 			const blockRaw = body.slice(h.lineEnd, next ? next.index : body.length);
 			const blockSubjects = extractSubjectOptions(blockRaw);
-			const subject =
-				blockSubjects.find((s) => s.letter === selectedSubjectLetter)?.subject ??
-				blockSubjects.find((s) => s.letter === "A")?.subject ??
-				blockSubjects[0]?.subject ??
-				"";
+			const chosen =
+				blockSubjects.find((s) => s.letter === selectedSubjectLetter) ??
+				blockSubjects.find((s) => s.letter === "A") ??
+				blockSubjects[0];
 			const strippedBlock = stripSubjectBlock(blockRaw)
 				.replace(/^\s*[-=]{3,}\s*/g, "")
 				.replace(/\n\s*[-=]{3,}\s*$/g, "");
-			return { subject, body: cleanBody(strippedBlock.trim()) };
+			return {
+				subject: chosen?.subject ?? "",
+				preview: chosen?.preview ?? "",
+				label: `Email ${i + 1}`,
+				subjectOptions: blockSubjects,
+				body: cleanBody(strippedBlock.trim()),
+			};
 		});
 	}
 
 	const subjects = extractSubjectOptions(body);
-	const chosenSubject =
-		subjects.find((s) => s.letter === selectedSubjectLetter)?.subject ??
-		subjects[0]?.subject ??
-		"";
+	const chosen = subjects.find((s) => s.letter === selectedSubjectLetter) ?? subjects[0];
 	const subjectStrippedBody = stripSubjectBlock(body);
 
 	let sections: ParsedSection[];
@@ -542,5 +554,15 @@ export function extractExportTouches(
 	}
 
 	const active = sections.find((s) => s.id === activeSectionId) ?? sections[0];
-	return active ? [{ subject: chosenSubject, body: cleanBody(active.body) }] : [];
+	return active
+		? [
+				{
+					subject: chosen?.subject ?? "",
+					preview: chosen?.preview ?? "",
+					label: active.label || "Content",
+					subjectOptions: subjects,
+					body: cleanBody(active.body),
+				},
+			]
+		: [];
 }

@@ -214,11 +214,30 @@ function buildFakeButtonHtml(cta: CtaLink): string {
 export interface EmailTouch {
 	subject: string;
 	body: string;
+	/**
+	 * Inbox preview line for this touch. HubSpot's Marketing Emails API has no
+	 * preheader field — verified against both the v3 and 2026-03 OpenAPI specs,
+	 * where the only "preview" property is `previewKey` (a preview-link token).
+	 * So this is rendered as a hidden preheader block at the top of the body,
+	 * which is how the preview line reaches the inbox anyway.
+	 */
+	preview?: string;
 }
 
 export interface CreatedDraft {
 	id: string;
 	url: string;
+}
+
+/** A touch that HubSpot rejected, so the rep learns which ones didn't land. */
+export interface FailedDraft {
+	subject: string;
+	error: string;
+}
+
+export interface CreateDraftsResult {
+	created: CreatedDraft[];
+	failed: FailedDraft[];
 }
 
 /**
@@ -650,15 +669,17 @@ export async function createDraftMarketingEmails(
 	repName: string,
 	repReplyTo: string | undefined,
 	accessToken: string,
-): Promise<CreatedDraft[]> {
+): Promise<CreateDraftsResult> {
 	const created: CreatedDraft[] = [];
+	const failed: FailedDraft[] = [];
 
 	for (let i = 0; i < touches.length; i++) {
 		const touch = touches[i]!;
 		const subject = applyTokens(touch.subject || `${targetCompany} — ${format}`, repName);
 		const { cleanedBody, cta } = extractCtaLink(touch.body);
+		const preheader = buildPreheaderHtml(applyTokens(touch.preview ?? "", repName));
 		const bodyHtml = bodyToHtml(cleanedBody) + (cta ? `\n${buildFakeButtonHtml(cta)}` : "");
-		const html = applyTokens(bodyHtml, repName);
+		const html = preheader + applyTokens(bodyHtml, repName);
 		const name = `${targetCompany || "Untitled"} — ${format} — Touch ${i + 1} (draft)`;
 
 		const widgets: Record<string, unknown> = {
@@ -670,30 +691,59 @@ export async function createDraftMarketingEmails(
 			"module-3-0-0": buildFooterWidget(),
 		};
 
-		const res = await hubspotFetch<HubspotEmailCreateResponse>(
-			"/marketing/v3/emails",
-			accessToken,
-			{
-				method: "POST",
-				body: {
-					name,
-					subject,
-					content: {
-						templatePath: PLAIN_TEXT_4_TEMPLATE_PATH,
-						flexAreas: buildFlexAreas(),
-						styleSettings: PLAIN_TEXT_4_STYLE_SETTINGS,
-						widgets,
+		// Per-touch try/catch: an unhandled throw mid-loop used to abandon the
+		// drafts already created in HubSpot without ever returning their URLs,
+		// so the rep had orphans they couldn't find.
+		try {
+			const res = await hubspotFetch<HubspotEmailCreateResponse>(
+				"/marketing/v3/emails",
+				accessToken,
+				{
+					method: "POST",
+					body: {
+						name,
+						subject,
+						content: {
+							templatePath: PLAIN_TEXT_4_TEMPLATE_PATH,
+							flexAreas: buildFlexAreas(),
+							styleSettings: PLAIN_TEXT_4_STYLE_SETTINGS,
+							widgets,
+						},
+						from: { fromName: repName, replyTo: repReplyTo ?? "" },
 					},
-					from: { fromName: repName, replyTo: repReplyTo ?? "" },
 				},
-			},
-		);
+			);
 
-		created.push({
-			id: res.id,
-			url: `https://app-na2.hubspot.com/email/${HUBSPOT_PORTAL_ID}/edit/${res.id}/content`,
-		});
+			created.push({
+				id: res.id,
+				url: `https://app-na2.hubspot.com/email/${HUBSPOT_PORTAL_ID}/edit/${res.id}/content`,
+			});
+		} catch (err) {
+			console.error(`HubSpot draft failed for touch ${i + 1} ("${subject}")`, err);
+			failed.push({
+				subject,
+				error: err instanceof Error ? err.message : "Unknown HubSpot error",
+			});
+		}
 	}
 
-	return created;
+	return { created, failed };
+}
+
+/**
+ * Hidden preheader block: the inbox preview line.
+ *
+ * Standard email technique — display:none plus the zero-width-space padding
+ * stops the client from pulling the first body sentence in after the preview
+ * text. Returns "" when there is no preview so nothing is injected.
+ */
+function buildPreheaderHtml(preview: string): string {
+	const text = preview.trim();
+	if (!text) return "";
+	return (
+		`<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;` +
+		`font-size:1px;line-height:1px;color:#ffffff;opacity:0;">` +
+		`${escapeHtml(text)}${"&#8203;&nbsp;".repeat(30)}` +
+		`</div>\n`
+	);
 }

@@ -10,6 +10,7 @@ import { fetchFavoriteSessions, fetchSessionById, toggleFavorite } from "@/lib/f
 import { HistoryCard } from "@/components/strategist";
 import { normalizeGenerationInput } from "@/lib/default-generation-input";
 import type { SessionSummary } from "@/lib/types";
+import { routeForMode } from "@/lib/constants";
 
 export default function SavedSessionsPage() {
 	const { user } = useAuthStore();
@@ -42,9 +43,7 @@ export default function SavedSessionsPage() {
 				const store = useStrategistStore.getState();
 				store.setInput(normalizeGenerationInput(session.input));
 				store.hydrateFromSavedSession(session);
-				router.push(
-					session.input?.mode === "persona" ? "/strategist/persona" : "/strategist",
-				);
+				router.push(routeForMode(session.input?.mode));
 			} catch {
 				toast.error("Failed to open session");
 			}

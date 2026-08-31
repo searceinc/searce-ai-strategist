@@ -9,6 +9,10 @@ import {
 import { auth } from "./config";
 
 const googleProvider = new GoogleAuthProvider();
+// Always show the account chooser. Without this, Chrome silently reuses whatever
+// Google account the profile is already signed into, so a rep with a personal
+// gmail active gets rejected by the allowlist without ever seeing a picker.
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
 const ALLOWED_EMAILS = new Set<string>([
 	"rushil.jariwala@searce.com",
@@ -36,7 +40,11 @@ export async function signInWithGoogle() {
 	const cred = await signInWithPopup(auth, googleProvider);
 	if (!isAllowed(cred.user.email)) {
 		// onAuthChange's filter will delete the user + reset the store.
-		throw new Error("This account is not authorized to access this app.");
+		// Name the rejected address: the usual cause is signing in with the wrong
+		// Google account, and showing it turns a support ticket into a self-fix.
+		throw new Error(
+			`${cred.user.email ?? "This account"} is not authorized to access this app.`,
+		);
 	}
 	return cred;
 }

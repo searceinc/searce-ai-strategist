@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PenLine, UserRound, History, Star, PanelLeftClose, PanelLeft } from "lucide-react";
+import { PenLine, UserRound, Users, History, Star, PanelLeftClose, PanelLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useStrategistStore } from "@/lib/store/useStrategistStore";
@@ -10,6 +10,7 @@ import { useStrategistStore } from "@/lib/store/useStrategistStore";
 const NAV_ITEMS = [
 	{ href: "/strategist", label: "Account Level", icon: PenLine },
 	{ href: "/strategist/persona", label: "Persona Level", icon: UserRound },
+	{ href: "/strategist/generic", label: "Generic / Segment", icon: Users },
 	{ href: "/strategist/history", label: "Content History", icon: History },
 	{ href: "/strategist/saved", label: "Saved Sessions", icon: Star },
 ] as const;
@@ -22,19 +23,31 @@ export default function Sidebar() {
 		<aside
 			className={cn(
 				"sticky top-16 flex h-[calc(100vh-4rem)] flex-col border-r border-border bg-sidebar transition-all duration-200",
-				sidebarOpen ? "w-60" : "w-14",
+				sidebarOpen ? "w-48" : "w-14",
 			)}
 		>
-			<div className="flex items-center justify-between py-4 pl-5 pr-3">
+			{/*
+				Padding mirrors the <nav> below (px-2) so the toggle icon sits on the
+				same vertical axis as the nav icons — 28px from the sidebar's left
+				edge, which is also dead-centre of the 56px collapsed rail. The old
+				`pl-5 pr-3` put it 8px to the right of the nav icons AND squeezed a
+				32px button into 24px of space when collapsed.
+			*/}
+			<div
+				className={cn(
+					"flex items-center px-2 py-4",
+					sidebarOpen ? "justify-between" : "justify-center",
+				)}
+			>
 				{sidebarOpen && (
-					<span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+					<span className="pl-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
 						Strategist
 					</span>
 				)}
 				<Button
 					variant="ghost"
 					size="icon"
-					className="size-8 cursor-pointer"
+					className="size-9 shrink-0 cursor-pointer"
 					onClick={() => setSidebarOpen(!sidebarOpen)}
 				>
 					{sidebarOpen ? (

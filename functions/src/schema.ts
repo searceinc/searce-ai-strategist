@@ -17,7 +17,9 @@ const generationInputObjectSchema = z
 		targetPersonaCategory: z.string().optional().default(""),
 		targetPersonaSubCategory: z.string().optional().default(""),
 		targetPersonaJobTitle: z.string().optional().default(""),
-		mode: z.enum(["account", "persona"]).optional().default("account"),
+		mode: z.enum(["account", "persona", "generic"]).optional().default("account"),
+		/** Generic mode: the prospect_uploads doc backing this run's audience roster. */
+		prospectUploadId: z.string().optional().default(""),
 		personaName: z.string().optional().default(""),
 		personaLinkedInUrl: z.string().optional().default(""),
 		personaType: z
@@ -127,6 +129,8 @@ export const pushToHubspotDraftsSchema = z.object({
 			z.object({
 				subject: z.string(),
 				body: z.string().min(1),
+				/** Inbox preview line; rendered as a hidden preheader in the body. */
+				preview: z.string().optional().default(""),
 			}),
 		)
 		.min(1)

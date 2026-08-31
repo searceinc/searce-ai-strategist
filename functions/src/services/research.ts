@@ -193,12 +193,22 @@ Extract ONLY facts genuinely about ${personName} specifically. If the sources ar
 }
 
 /**
- * Tavily-powered live research. Four parallel searches:
+ * Tavily-powered live research. One parallel fan-out of up to 8 searches in
+ * Account mode and 14 in Persona mode (the count varies: the social searches
+ * are skipped when there is no company/taxonomy anchor):
  *
- * 1. News pulse        — named company OR industry/taxonomy news (topic:"news")
- * 2. Industry trends + ROI — topic:"general", last month
- * 3. Sub-category pain points (workbook-grounded seed) — topic:"general", last year
- * 4. Searce case-study lookup scoped to searce.com
+ * 1a-1c. News pulse       — named company, domain, and taxonomy news (topic:"news")
+ * 2.  Industry trends + ROI — topic:"general", last month
+ * 3.  Sub-category pain points (workbook-grounded seed) — topic:"general", last year
+ * 4.  Searce case-study lookup scoped to searce.com
+ * 5-8. Company social — LinkedIn / X / Instagram / Reddit (includeDomains-scoped)
+ * 9-14. Persona mode only — interviews/quotes, general activity, and the same
+ *       four social domains scoped to the named individual.
+ *
+ * COST: every call uses searchDepth "advanced" = 2 Tavily credits, so one
+ * account-mode run is ~16 credits and a persona-mode run ~28 against a
+ * 1,000/month free tier. Regenerate reuses the persisted snapshot instead of
+ * re-running this — see services/research-fingerprint.ts.
  *
  * `externalSources` lists non-Searce URLs for the Intelligence Feed: categorized
  * news/metrics/pain rows first, then any other Tavily hits in `allSources` as `reference`.
@@ -338,7 +348,12 @@ export async function runResearch(
 	// discussion/reviews instead of a profile. Only run when we have a concrete
 	// anchor to search for; skip (rather than break the positional destructuring
 	// below) otherwise.
-	const socialAnchor = companyName || (!isGeneralPov ? taxonomyPhrase : "");
+	// Generic/segment mode has no company to look up, and searching LinkedIn or
+	// Instagram for an industry phrase ("Manufacturing") returns noise, not
+	// signal. Skipping the four social searches there halves the run's Tavily
+	// cost — 8 credits instead of 16 — which is the whole point of segment mode.
+	const socialAnchor =
+		input.mode === "generic" ? "" : companyName || (!isGeneralPov ? taxonomyPhrase : "");
 	searchPromises.push(
 		socialAnchor
 			? tavilySearch({
@@ -474,6 +489,13 @@ export async function runResearch(
 		],
 	] = await Promise.all([Promise.all(searchPromises), Promise.all(personaSearchPromises)]);
 
+	// ── Resolve the company's own LinkedIn page + website ──────────────────
+	// Done here, while linkedinCompanyResults is still identifiable: once these
+	// merge into allSources below they're only distinguishable by hostname, and
+	// raw_content is stripped before the snapshot is returned.
+	const resolvedLinkedInUrl = pickCompanyLinkedInUrl(linkedinCompanyResults?.results);
+	const resolvedDomain = pickDomainFromLinkedIn(linkedinCompanyResults?.results);
+
 	// ── Extract news with URLs (company-specific OR industry pulse) ──
 	const newsWithUrls: NewsItem[] = [];
 	let companyContext = "";
@@ -606,20 +628,6 @@ export async function runResearch(
 		date: item.published_date,
 	}));
 
-	let personaBio = "";
-	let personaTriggers: string[] = [];
-	if (personaName) {
-		const personaSummary = await summarizePersonaResearch(
-			personaRawSources,
-			personaName,
-			geminiKey,
-		);
-		if (personaSummary) {
-			personaBio = personaSummary.bio;
-			personaTriggers = personaSummary.triggers;
-		}
-	}
-
 	// ── Relevance-filter raw source content with a cheap Gemini pass, ──
 	// grounded in the actual content instead of a fixed keyword list/regex.
 	// Falls back to the naive extraction below only if the call fails.
@@ -628,12 +636,24 @@ export async function runResearch(
 		trendResults?.answer,
 		painPointResults?.answer,
 	].filter((a): a is string => Boolean(a));
-	const summary = await summarizeResearch(
-		allSources,
-		tavilyAnswers,
-		{ companyName, taxonomyPhrase },
-		geminiKey,
-	);
+
+	// Both summarizers read independently-built corpora (personaRawSources vs
+	// allSources) and neither consumes the other's output, so they run together.
+	// Awaiting them in sequence cost a full extra LLM round-trip on every
+	// persona-mode generation for no reason.
+	const [personaSummary, summary] = await Promise.all([
+		personaName
+			? summarizePersonaResearch(personaRawSources, personaName, geminiKey)
+			: Promise.resolve(null),
+		summarizeResearch(allSources, tavilyAnswers, { companyName, taxonomyPhrase }, geminiKey),
+	]);
+
+	let personaBio = "";
+	let personaTriggers: string[] = [];
+	if (personaSummary) {
+		personaBio = personaSummary.bio;
+		personaTriggers = personaSummary.triggers;
+	}
 
 	if (summary) {
 		if (summary.companyContext) companyContext = summary.companyContext;
@@ -709,6 +729,10 @@ export async function runResearch(
 			score: s.score,
 			...(s.published_date !== undefined ? { published_date: s.published_date } : {}),
 		})),
+		// Only emitted when actually found — never constructed. Omitted rather
+		// than set to undefined, which the Firestore Admin SDK rejects.
+		...(resolvedLinkedInUrl ? { resolvedLinkedInUrl } : {}),
+		...(resolvedDomain ? { resolvedDomain } : {}),
 		tavilyAnswer: newsResults?.answer ?? trendResults?.answer,
 		newsWithUrls,
 		metricsWithUrls,
@@ -778,6 +802,85 @@ function buildExternalSources(
 	}
 
 	return out;
+}
+
+/**
+ * The company's own LinkedIn page out of the LinkedIn-scoped search results.
+ *
+ * That search queries the bare company name against linkedin.com with no
+ * "/company" qualifier, so results legitimately include `/in/...` (a *person*),
+ * `/posts/...`, `/jobs/...`. Only a `/company/<slug>` path is the org page.
+ *
+ * Returns "" when nothing matches — the field then stays blank, which is the
+ * pre-existing behaviour. A LinkedIn URL is NEVER constructed from the company
+ * name: slugs aren't derivable (Searce is `searceinc`), and a guessed URL is
+ * indistinguishable from a real one until a prospect clicks it.
+ */
+function pickCompanyLinkedInUrl(results: TavilyResult[] | undefined): string {
+	for (const item of results ?? []) {
+		try {
+			const parsed = new URL(item.url);
+			if (!parsed.hostname.toLowerCase().endsWith("linkedin.com")) continue;
+			const path = parsed.pathname.replace(/\/+$/, "");
+			if (/^\/company\/[^/]+$/.test(path)) {
+				return `${parsed.origin}${path}`;
+			}
+		} catch {
+			continue;
+		}
+	}
+	return "";
+}
+
+/** Hosts that are never the prospect's own site. */
+const NON_COMPANY_HOSTS = [
+	"linkedin.com",
+	"x.com",
+	"twitter.com",
+	"instagram.com",
+	"facebook.com",
+	"reddit.com",
+	"youtube.com",
+	"wikipedia.org",
+	"crunchbase.com",
+	"bloomberg.com",
+	"glassdoor.com",
+	"indeed.com",
+	"zoominfo.com",
+	"pitchbook.com",
+];
+
+/**
+ * The company's website, parsed out of its LinkedIn page body.
+ *
+ * No Tavily search returns the target's own domain — news searches return
+ * press hosts, social searches return the social platforms — so this reads the
+ * `raw_content` we already fetch for the LinkedIn page, where the org's website
+ * is normally listed.
+ *
+ * Deliberately fragile-tolerant: LinkedIn changes its page text periodically.
+ * On any failure this returns "" and the field stays blank, exactly as today.
+ * Do not add retries or fall back to guessing a domain from the company name.
+ */
+function pickDomainFromLinkedIn(results: TavilyResult[] | undefined): string {
+	for (const item of results ?? []) {
+		const body = item.raw_content ?? item.content ?? "";
+		if (!body) continue;
+		for (const match of body.matchAll(/https?:\/\/[^\s"'<>)\]]+/g)) {
+			try {
+				const host = new URL(match[0]).hostname.toLowerCase().replace(/^www\./, "");
+				if (!host.includes(".")) continue;
+				if (NON_COMPANY_HOSTS.some((bad) => host === bad || host.endsWith(`.${bad}`))) {
+					continue;
+				}
+				if (host.endsWith(".gov") || host.endsWith(".edu")) continue;
+				return host;
+			} catch {
+				continue;
+			}
+		}
+	}
+	return "";
 }
 
 function extractHostname(url: string): string {

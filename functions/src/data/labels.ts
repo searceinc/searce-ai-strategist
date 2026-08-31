@@ -72,3 +72,36 @@ export const REGION_FALLBACKS: Record<string, string> = {
 	EMEA: "India",
 	India: "APAC",
 };
+
+// ─── Searce services / practices ─────────────────────────────────────────────
+
+/**
+ * Display names for the service values the ConfigPanel offers. Mirrors
+ * SEARCE_SERVICES in lib/constants.ts.
+ *
+ * These keys are historical and several no longer match their label, so the
+ * prompt must never build a service name by de-underscoring the value — doing
+ * that told the model "finops cost optimization" when the rep picked
+ * "Managed Services", and "enterprise transformation" for "Future of Work".
+ */
+export const SERVICE_LABELS: Record<string, string> = {
+	general: "General Service",
+	cloud_modernization: "Cloud Modernisation",
+	data_analytics: "Data & Analytics",
+	ai_automation: "Applied AI (GenAI/ML)",
+	location_intelligence: "Location Intelligence",
+	devops_platform_engineering: "Software Engineering",
+	finops_cost_optimization: "Managed Services",
+	enterprise_transformation: "Future of Work",
+	secops: "SecOps",
+};
+
+/**
+ * Display name for a service value. Anything not in SERVICE_LABELS is a
+ * rep-typed custom practice and is passed through verbatim.
+ */
+export function serviceLabel(value: string): string {
+	const trimmed = (value ?? "").trim();
+	if (!trimmed) return "";
+	return SERVICE_LABELS[trimmed] ?? trimmed;
+}

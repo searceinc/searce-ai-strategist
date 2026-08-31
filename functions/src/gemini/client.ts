@@ -1,5 +1,15 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
+/**
+ * Per-call wall-clock ceiling for Gemini.
+ *
+ * The callable's own budget is 120s and it may chain up to three generation
+ * calls (structured -> text fallback -> compliance rewrite). Without a per-call
+ * bound, one stalled request consumes the entire budget and the rep gets a bare
+ * timeout instead of the fallback path they would otherwise land on.
+ */
+const GEMINI_TIMEOUT_MS = 45_000;
+
 let cachedClient: GoogleGenAI | null = null;
 
 function getClient(apiKey: string): GoogleGenAI {
@@ -34,6 +44,7 @@ export async function generateWithGemini({
 		model,
 		contents: prompt,
 		config: {
+			abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
 			systemInstruction,
 			temperature,
 			maxOutputTokens,
@@ -85,6 +96,7 @@ export async function generateStructuredWithGemini<T = unknown>({
 		model,
 		contents: prompt,
 		config: {
+			abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
 			systemInstruction,
 			temperature,
 			maxOutputTokens,

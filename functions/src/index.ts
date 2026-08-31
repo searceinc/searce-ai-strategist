@@ -5,8 +5,11 @@ import { orchestrateGeneration } from "./services/content.js";
 import {
 	saveSession,
 	updateSession,
+	getSessionResearch,
 	saveProspectUpload as saveProspectUploadDoc,
 } from "./services/db.js";
+import { researchFingerprint } from "./services/research-fingerprint.js";
+import type { GenerationInput, ResearchSnapshot } from "./types.js";
 import { createDraftMarketingEmails, humanizeEmailLocalPart } from "./hubspot/marketing-email.js";
 import {
 	generationInputSchema,
@@ -46,6 +49,10 @@ export const generateContent = onCall(
 		...callableHttp,
 		timeoutSeconds: 120,
 		memory: "512MiB",
+		// Deliberately NO minInstances: scale-to-zero is wanted here — an
+		// always-warm instance bills 24/7 for an internal tool that is idle most
+		// of the day. The trade is a Node 22 cold start on the first generation
+		// after an idle period; the research-reuse path keeps regenerates fast.
 	},
 	async (request) => {
 		if (!request.auth) {
@@ -82,8 +89,20 @@ export const generateContent = onCall(
 				};
 			}
 
+			// Fold anything research resolved into the input BEFORE persisting.
+			// researchFingerprint() includes targetDomain, so if the client starts
+			// sending a resolved domain the stored input lacks, the next regenerate
+			// mismatches and re-spends the whole Tavily fan-out.
+			const enrichedInput = {
+				...input,
+				intelligenceFeedFocus: "",
+				targetDomain: input.targetDomain || (result.research.resolvedDomain ?? ""),
+				targetLinkedInUrl:
+					input.targetLinkedInUrl || (result.research.resolvedLinkedInUrl ?? ""),
+			};
+
 			const sessionId = await saveSession(request.auth.uid, {
-				input: { ...input, intelligenceFeedFocus: "" },
+				input: enrichedInput,
 				research: result.research,
 				caseStudyMatches: result.caseStudyMatches,
 				fallbackPath: result.fallbackPath,
@@ -141,7 +160,22 @@ export const regenerateContent = onCall(
 		const keys = requireKeys();
 
 		try {
-			const result = await orchestrateGeneration(input, keys.tavily, keys.gemini);
+			// Regenerate is almost always a prompt-level change (different tone,
+			// angle, sequence length, or an Intelligence-Feed refocus) against an
+			// unchanged target. Re-running research there re-spent 16-28 Tavily
+			// credits and several seconds to rebuild an identical snapshot, so
+			// reuse it whenever the research-shaping inputs actually match.
+			const stored = await getSessionResearch(sessionId, request.auth.uid);
+			const canReuseResearch =
+				stored !== null &&
+				researchFingerprint(stored.input as Partial<GenerationInput>) ===
+					researchFingerprint(input as Partial<GenerationInput>);
+
+			const result = await orchestrateGeneration(input, keys.tavily, keys.gemini, {
+				reusedResearch: canReuseResearch
+					? (stored.research as unknown as ResearchSnapshot)
+					: undefined,
+			});
 
 			await updateSession(sessionId, {
 				generatedContent: result.generatedContent,
@@ -176,6 +210,28 @@ export const regenerateContent = onCall(
 
 // ─── Read sessions (Admin SDK — same DB as writes; bypasses client rules) ───
 
+/**
+ * Fields the history/favourites lists actually render (see docToSessionSummary
+ * + sessionContentPreview in session-read.ts).
+ *
+ * Projected with .select() so the list query stops pulling the whole session
+ * document. Each doc also carries the full `research` snapshot, `caseStudyMatches`
+ * and `strategicPriority` — none of which a list card shows — so fetching 50 of
+ * them was downloading megabytes to render a dozen small fields, which is why
+ * Content History was slow to appear.
+ */
+const SESSION_SUMMARY_FIELDS = [
+	"userId",
+	"createdAt",
+	"updatedAt",
+	"input",
+	"confidenceScore",
+	"fallbackPath",
+	"isFavorite",
+	"editedContent",
+	"generatedContent",
+] as const;
+
 export const listStrategistSessions = onCall(callableHttp, async (request) => {
 	if (!request.auth) {
 		throw new HttpsError("unauthenticated", "Sign in required.");
@@ -189,6 +245,7 @@ export const listStrategistSessions = onCall(callableHttp, async (request) => {
 			.where("userId", "==", uid)
 			.orderBy("createdAt", "desc")
 			.limit(max)
+			.select(...SESSION_SUMMARY_FIELDS)
 			.get();
 
 		const sessions = snap.docs.map((d) => docToSessionSummary(d.id, d.data()));
@@ -210,6 +267,8 @@ export const listFavoriteStrategistSessions = onCall(callableHttp, async (reques
 			.where("userId", "==", uid)
 			.where("isFavorite", "==", true)
 			.orderBy("createdAt", "desc")
+			.limit(100)
+			.select(...SESSION_SUMMARY_FIELDS)
 			.get();
 
 		const sessions = snap.docs.map((d) => docToSessionSummary(d.id, d.data()));
@@ -363,7 +422,7 @@ export const pushToHubspotDrafts = onCall(callableHttp, async (request) => {
 	const repName = request.auth.token.name ?? humanizeEmailLocalPart(repEmail);
 
 	try {
-		const created = await createDraftMarketingEmails(
+		const { created, failed } = await createDraftMarketingEmails(
 			touches,
 			targetCompany,
 			format,
@@ -371,7 +430,9 @@ export const pushToHubspotDrafts = onCall(callableHttp, async (request) => {
 			repEmail,
 			hubspotAccessToken,
 		);
-		return { created };
+		// Partial success is reported, not thrown: drafts that did land already
+		// exist in HubSpot and the rep needs their URLs.
+		return { created, failed };
 	} catch (err) {
 		console.error("pushToHubspotDrafts failed:", err);
 		throw new HttpsError(

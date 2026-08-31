@@ -105,5 +105,9 @@ export function migrateLegacyInput(raw: LegacyShape): GenerationInput {
 		linkedinInmailVariation: raw.linkedinInmailVariation ?? "1",
 		sequenceCount,
 		intelligenceFeedFocus: raw.intelligenceFeedFocus ?? "",
+		// Generic mode's audience roster. MUST stay in this literal — this function
+		// is an explicit allowlist with no ...raw spread, so an omitted key is
+		// silently dropped before the prompt builder ever sees it.
+		prospectUploadId: raw.prospectUploadId ?? "",
 	};
 }

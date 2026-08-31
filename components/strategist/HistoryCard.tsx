@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { confidenceLabel, confidenceColor } from "@/lib/constants";
+import { confidenceLabel, confidenceColor, serviceLabel } from "@/lib/constants";
 import type { SessionSummary } from "@/lib/types";
 
 interface HistoryCardProps {
@@ -14,11 +14,18 @@ interface HistoryCardProps {
 	onToggleFavorite: (id: string, current: boolean) => void;
 }
 
+/** Badge text per mode. Was a binary ternary that showed generic as "Account". */
+const MODE_LABELS: Record<string, string> = {
+	account: "Account",
+	persona: "Persona",
+	generic: "Segment",
+};
+
 export default function HistoryCard({ session, onOpen, onToggleFavorite }: HistoryCardProps) {
 	const formatLabel = session.selectedFormat.replace(/_/g, " ");
-	const serviceLabel = session.selectedService
-		? session.selectedService.replace(/_/g, " ")
-		: "Auto";
+	// Never de-underscore the value — "finops_cost_optimization" is displayed as
+	// "Managed Services". serviceLabel() passes custom rep-typed text through.
+	const serviceText = session.selectedService ? serviceLabel(session.selectedService) : "Auto";
 
 	const confLabel = confidenceLabel(session.confidenceScore);
 	const confClr = confidenceColor(session.confidenceScore);
@@ -34,7 +41,7 @@ export default function HistoryCard({ session, onOpen, onToggleFavorite }: Histo
 				<div className="flex items-start justify-between">
 					<div className="space-y-1">
 						<h3 className="font-semibold leading-tight">
-							{session.targetCompany || serviceLabel || "Industry Campaign"}
+							{session.targetCompany || serviceText || "Industry Campaign"}
 						</h3>
 						<p className="text-xs text-muted-foreground">
 							{session.targetPersonaJobTitle || session.region || "General audience"}
@@ -62,13 +69,13 @@ export default function HistoryCard({ session, onOpen, onToggleFavorite }: Histo
 						variant={session.mode === "persona" ? "default" : "secondary"}
 						className="text-xs capitalize"
 					>
-						{session.mode === "persona" ? "Persona" : "Account"}
+						{MODE_LABELS[session.mode] ?? "Account"}
 					</Badge>
 					<Badge variant="secondary" className="text-xs capitalize">
 						{formatLabel}
 					</Badge>
 					<Badge variant="outline" className="text-xs capitalize">
-						{serviceLabel}
+						{serviceText}
 					</Badge>
 				</div>
 

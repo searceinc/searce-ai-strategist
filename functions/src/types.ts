@@ -31,9 +31,21 @@ export type StrategicAngle =
 	| "direct_pitch"
 	| "strategic_priority";
 
-export type GenerationMode = "account" | "persona";
+/**
+ * account  — generic company POV, one named target account
+ * persona  — one named individual
+ * generic  — segment/industry level: a roster of companies sharing the same
+ *            filters, written for all of them and personalised to none
+ */
+export type GenerationMode = "account" | "persona" | "generic";
 export type PersonaType = "champion" | "economic_buyer" | "influencer_user" | "blocker";
 
+/**
+ * The known Searce practices. Note the values below are historical keys — several
+ * no longer read like their current label (`finops_cost_optimization` is shown as
+ * "Managed Services", `enterprise_transformation` as "Future of Work"). Never
+ * derive a display string from the value; use `serviceLabel()` instead.
+ */
 export type SearceService =
 	| "general"
 	| "cloud_modernization"
@@ -65,6 +77,8 @@ export interface GenerationInput {
 	targetPersonaJobTitle: string;
 	/** Account-level (generic company POV) vs persona-level (named individual). */
 	mode: GenerationMode;
+	/** Generic mode only: prospect_uploads doc id for the audience roster. */
+	prospectUploadId?: string;
 	/** Persona-level only: the named contact's full name. */
 	personaName: string;
 	/** Persona-level only: the named contact's LinkedIn profile URL. */
@@ -72,7 +86,12 @@ export interface GenerationInput {
 	/** Persona-level only: buying role in the deal. */
 	personaType?: PersonaType;
 	region: string;
-	selectedService: SearceService | "";
+	/**
+	 * A `SearceService` value, a rep-typed custom practice, or "" when unset.
+	 * Free string by design — the ConfigPanel offers a "Custom service" input
+	 * alongside the dropdown, exactly like targetPersonaJobTitle.
+	 */
+	selectedService: string;
 	selectedFormat: ContentFormat;
 	strategicAngle: StrategicAngle;
 	/** Used when strategicAngle is "strategic_priority"; empty = auto-match by job title. */
@@ -141,6 +160,13 @@ export interface ResearchSnapshot {
 	externalSources: ExternalSourceItem[];
 	isLiveData: boolean;
 	timestamp: string;
+	/**
+	 * Company's own LinkedIn page, resolved from the LinkedIn-scoped search.
+	 * Absent when nothing matched — never constructed from the company name.
+	 */
+	resolvedLinkedInUrl?: string;
+	/** Company's website host, parsed off its LinkedIn page. Absent if not found. */
+	resolvedDomain?: string;
 	/** Persona-level only: named contact's bio/career summary. */
 	personaBio?: string;
 	/** Persona-level only: dated public signals (quotes, interviews, LinkedIn activity). */
