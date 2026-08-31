@@ -3,9 +3,9 @@
 // Regenerate with scripts/build-referenceable-stories.mjs after the sheet changes.
 // DO NOT EDIT BY HAND.
 //
-// URLs intentionally point at the Searce case-studies hub: we do not have
-// per-story detail URLs, and fabricating them is forbidden. Emails therefore
-// name these clients in plain prose (no inline link) as social proof.
+// `url` is a live searce.com/cs-N-detail page when the story title matched
+// scripts/case-study-urls.csv, otherwise the generic case-studies hub.
+// URLs are never constructed from an ID — fabricating a slug is forbidden.
 
 export interface ReferenceableStory {
 	id: string;

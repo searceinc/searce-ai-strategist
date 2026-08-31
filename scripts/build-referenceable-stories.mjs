@@ -9,9 +9,18 @@
 // which parses every "Referenceable" slide from the master-deck PDF into
 // scripts/referenceable-stories.csv (255 stories). Curated overrides for the
 // original 52 hand-edited rows live in referenceable-stories-curated-52.csv.bak.
-// Deterministic, no fabrication: every field is sourced from the sheet. URLs
-// intentionally point at the Searce case-studies hub — we do not have per-story
-// detail URLs and the prompt rules forbid inventing them.
+// Deterministic, no fabrication: every field is sourced from a sheet.
+//
+// scripts/case-study-urls.csv (136 live searce.com/cs-N-detail pages, transcribed
+// from the "Website All Pages List" sheet) has two real jobs:
+//   1. it generates functions/src/data/case-study-urls.ts, the runtime allowlist
+//      that stops the model shipping an invented cs-N slug; and
+//   2. it supplies titles/URLs for the curated per-industry Proof-tab links.
+// Its title column is ALSO tried as a per-story join below, but the master-deck
+// titles don't match the website's, so that currently resolves 0 of 255 (logged).
+// A story only gets a specific URL on an exact normalized title match; anything
+// unmatched keeps the generic hub. URLs are never constructed from an ID —
+// guessing a cs-N slug is exactly the fabrication the prompt rules forbid.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -23,6 +32,47 @@ const CSV_PATH = process.argv[2]
 	: resolve(__dirname, "referenceable-stories.csv");
 const OUT_PATH = resolve(__dirname, "../functions/src/data/referenceable-stories.ts");
 const HUB = "https://www.searce.com/insights/case-studies";
+const URL_CSV_PATH = resolve(__dirname, "case-study-urls.csv");
+
+/**
+ * Normalized title -> live case-study URL, from scripts/case-study-urls.csv.
+ * Missing/unreadable file is non-fatal: every story then falls back to HUB,
+ * which is the pre-existing behaviour.
+ */
+function loadCaseStudyUrls() {
+	const map = new Map();
+	let rows;
+	try {
+		rows = parseCsv(readFileSync(URL_CSV_PATH, "utf8"));
+	} catch {
+		console.warn(`[urls] ${URL_CSV_PATH} not found — every story will use the hub URL.`);
+		return map;
+	}
+	const header = rows[0] ?? [];
+	const titleIdx = header.indexOf("title");
+	const urlIdx = header.indexOf("url");
+	if (titleIdx < 0 || urlIdx < 0) {
+		console.warn("[urls] case-study-urls.csv missing title/url columns — using hub URLs.");
+		return map;
+	}
+	for (const r of rows.slice(1)) {
+		const key = normalizeTitleKey(r[titleIdx] || "");
+		const url = (r[urlIdx] || "").trim();
+		if (key && url && !map.has(key)) map.set(key, url);
+	}
+	return map;
+}
+
+/** Loose-but-exact join key: case/punctuation-insensitive, whitespace-collapsed. */
+function normalizeTitleKey(title) {
+	return String(title || "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim();
+}
+
+const CASE_STUDY_URLS = loadCaseStudyUrls();
+let urlMatchCount = 0;
 
 const IND_MAP = {
 	"Financial Services & Insurance (FSI)": "FSI",
@@ -287,8 +337,21 @@ for (const r of table.slice(1)) {
 		metricHeadline: headlineMetric(r[COL.impact]),
 		techStack: clean(r[COL.tech]),
 		cloudProvider: cloudOf(r[COL.tech]),
-		url: HUB,
+		url: resolveStoryUrl(title),
 	});
+}
+
+/**
+ * Live detail URL for a story title, or the hub when we have no verified match.
+ * Never guesses a slug.
+ */
+function resolveStoryUrl(title) {
+	const hit = CASE_STUDY_URLS.get(normalizeTitleKey(title));
+	if (hit) {
+		urlMatchCount++;
+		return hit;
+	}
+	return HUB;
 }
 
 const ORDER = [
@@ -316,9 +379,9 @@ out.push("// Source: curated CSV of referenceable (publicly citable) Searce case
 out.push("// Regenerate with scripts/build-referenceable-stories.mjs after the sheet changes.");
 out.push("// DO NOT EDIT BY HAND.");
 out.push("//");
-out.push("// URLs intentionally point at the Searce case-studies hub: we do not have");
-out.push("// per-story detail URLs, and fabricating them is forbidden. Emails therefore");
-out.push("// name these clients in plain prose (no inline link) as social proof.");
+out.push("// `url` is a live searce.com/cs-N-detail page when the story title matched");
+out.push("// scripts/case-study-urls.csv, otherwise the generic case-studies hub.");
+out.push("// URLs are never constructed from an ID — fabricating a slug is forbidden.");
 out.push("");
 out.push("export interface ReferenceableStory {");
 out.push("\tid: string;");
@@ -370,36 +433,61 @@ const byIndustry = {};
 for (const r of records) {
 	(byIndustry[r.industryCode] ||= []).push(r);
 }
-function pickTop(list) {
-	return [...list]
-		.sort((a, b) => {
-			const an = /\d/.test(a.metricHeadline) ? 0 : 1;
-			const bn = /\d/.test(b.metricHeadline) ? 0 : 1;
-			return an - bn;
-		})
-		.slice(0, 3);
+// ── Proof-tab links: curated, per-industry, real detail URLs ────────────────
+//
+// Sourced from scripts/industry-case-study-links.csv — the industry -> case
+// study mapping transcribed from the "4. Pain Point to Solution Mapping" sheet,
+// joined to the live page titles/URLs in scripts/case-study-urls.csv.
+//
+// This replaces the previous derivation from the master-deck stories, whose
+// `url` is the generic hub for every row: the Proof tab was showing "specific"
+// links that all landed on the same case-studies index (the P4 feedback).
+const INDUSTRY_LINK_ROWS = (() => {
+	try {
+		const rows = parseCsv(
+			readFileSync(resolve(__dirname, "industry-case-study-links.csv"), "utf8"),
+		);
+		const header = rows[0] ?? [];
+		const i = (n) => header.indexOf(n);
+		const [ci, ti, ui] = [i("industry_code"), i("title"), i("url")];
+		if (ci < 0 || ti < 0 || ui < 0) return [];
+		return rows
+			.slice(1)
+			.filter((r) => (r[ci] || "").trim() && (r[ui] || "").trim())
+			.map((r) => ({ code: r[ci].trim(), title: (r[ti] || "").trim(), url: r[ui].trim() }));
+	} catch {
+		console.warn(
+			"[links] industry-case-study-links.csv unreadable — Proof tab links will be empty.",
+		);
+		return [];
+	}
+})();
+
+const linksByIndustry = {};
+for (const row of INDUSTRY_LINK_ROWS) {
+	(linksByIndustry[row.code] ??= []).push(row);
 }
+
 const cl = [];
 cl.push("// AUTO-GENERATED by scripts/build-referenceable-stories.mjs. DO NOT EDIT BY HAND.");
-cl.push("// Static per-industry referenceable stories shown in the Intelligence Feed");
-cl.push('// "Proof" tab as a supplement to the live case-study matches.');
+cl.push('// Per-industry Searce case studies shown in the Intelligence Feed "Proof" tab');
+cl.push("// alongside the live case-study matches.");
+cl.push("//");
+cl.push("// Every URL here is a real, verified searce.com/cs-N-detail page — sourced from");
+cl.push("// the curated pain-point -> case-study sheet, never constructed from an ID.");
 cl.push("");
 cl.push("export const VERIFIED_SEARCE_LINKS: Record<");
 cl.push("\tstring,");
 cl.push("\t{ title: string; url: string; metrics: string }[]");
 cl.push("> = {");
-for (const code of Object.keys(byIndustry)) {
+for (const code of Object.keys(linksByIndustry).sort()) {
 	cl.push(`\t${code}: [`);
-	for (const r of pickTop(byIndustry[code])) {
-		const displayTitle =
-			r.title.toLowerCase().startsWith(r.client.toLowerCase()) ||
-			r.client.toLowerCase() === r.title.toLowerCase()
-				? r.title
-				: `${r.client}: ${r.title}`;
+	for (const r of linksByIndustry[code]) {
 		cl.push("\t\t{");
-		cl.push(`\t\t\ttitle: ${JSON.stringify(displayTitle)},`);
+		cl.push(`\t\t\ttitle: ${JSON.stringify(r.title)},`);
 		cl.push(`\t\t\turl: ${JSON.stringify(r.url)},`);
-		cl.push(`\t\t\tmetrics: ${JSON.stringify(r.metricHeadline)},`);
+		// No metrics column in the curated sheet; the UI omits the line when empty.
+		cl.push('\t\t\tmetrics: "",');
 		cl.push("\t\t},");
 	}
 	cl.push("\t],");
@@ -407,4 +495,41 @@ for (const code of Object.keys(byIndustry)) {
 cl.push("};");
 cl.push("");
 writeFileSync(CLIENT_OUT, cl.join("\n"));
+
+// ── Runtime allowlist of real case-study detail URLs ────────────────────────
+// Consumed by output-assembler.stripNonSearceLinks so a model-invented
+// "searce.com/cs-9999-detail" cannot ship: the host check alone used to let any
+// searce.com URL through, including fabricated slugs.
+const URL_OUT = resolve(__dirname, "../functions/src/data/case-study-urls.ts");
+const allowedPaths = [...CASE_STUDY_URLS.values()]
+	.map((u) => {
+		try {
+			return new URL(u).pathname.replace(/\/+$/, "").toLowerCase();
+		} catch {
+			return "";
+		}
+	})
+	.filter(Boolean)
+	.sort();
+const ul = [];
+ul.push("// AUTO-GENERATED by scripts/build-referenceable-stories.mjs. DO NOT EDIT BY HAND.");
+ul.push("// Source: scripts/case-study-urls.csv (live searce.com case-study pages).");
+ul.push("//");
+ul.push("// Allowlist of real case-study detail paths. Any /cs-<n>-detail path NOT in");
+ul.push("// this set is a fabricated slug and gets stripped from generated copy.");
+ul.push("");
+ul.push("export const VALID_CASE_STUDY_PATHS: ReadonlySet<string> = new Set([");
+for (const p of [...new Set(allowedPaths)]) ul.push(`\t${JSON.stringify(p)},`);
+ul.push("]);");
+ul.push("");
+writeFileSync(URL_OUT, ul.join("\n"));
+console.log(`Wrote ${new Set(allowedPaths).size} allowed case-study paths to ${URL_OUT}`);
 console.log(`Wrote client Proof-tab data to ${CLIENT_OUT}`);
+console.log(
+	`Story URLs: ${urlMatchCount}/${records.length} matched a live cs-N-detail page; ` +
+		`${records.length - urlMatchCount} use the hub (master-deck titles rarely match the website's).`,
+);
+console.log(
+	`Proof-tab links: ${INDUSTRY_LINK_ROWS.length} curated case studies across ` +
+		`${Object.keys(linksByIndustry).length} industries — all specific detail URLs.`,
+);

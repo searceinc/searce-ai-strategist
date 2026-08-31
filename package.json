@@ -10,7 +10,7 @@
 		"prepare": "husky",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"build:referenceable-stories": "node scripts/build-referenceable-stories.mjs",
+		"build:referenceable-stories": "node scripts/build-referenceable-stories.mjs && prettier --write functions/src/data/referenceable-stories.ts functions/src/data/case-study-urls.ts components/strategist/research-data.ts",
 		"extract:referenceable-stories": "node scripts/extract-referenceable-from-pdf.mjs",
 		"build:strategic-priorities": "node scripts/build-strategic-priorities.mjs"
 	},
