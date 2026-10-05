@@ -30,6 +30,7 @@ const ALLOWED_EMAILS = new Set<string>([
 	"sagar.porwal@searce.com",
 	"gaurav.desai@searce.com",
 	"sidhartha.sharma@searce.com",
+	"devesh.manani@searce.com",
 ]);
 
 function isAllowed(email: string | null | undefined): boolean {
